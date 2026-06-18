@@ -42,6 +42,15 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.15',
+    date: '2026-06-18',
+    items: [
+      '修复谢无咎尸体在戏台和尸检场景中悬浮的问题，让尸体重新贴合地板位置。',
+      '修复绮云楼门口未点击“推开大门”前提前露出开门状态的问题。',
+      '替换掌柜、小伶人立绘与对话头像资源。',
+    ],
+  },
+  {
     version: '1.14',
     date: '2026-06-18',
     items: [
@@ -421,11 +430,8 @@ export default class StoryEngine {
     if (!scene || scene.id !== 'front-door') {
       return 0;
     }
-    if (this.stepIndex < 5 && !this.doorOpenedAt) {
-      return 1;
-    }
     if (!this.doorOpenedAt) {
-      return 0;
+      return 1;
     }
     const progress = Math.min(1, (Date.now() - this.doorOpenedAt) / 900);
     return Math.max(0, 1 - progress);
@@ -572,7 +578,7 @@ export default class StoryEngine {
         });
       }
     } else if (scene.id === 'body-check') {
-      this.drawBody(w * 0.4, stageTop + stageH * 0.58, w * 0.2, stageH * 0.105);
+      this.drawBody(w * 0.4, stageTop + stageH * 0.83, w * 0.2, stageH * 0.105);
       this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.48, '#31516b', {
         width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
         height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
@@ -612,7 +618,7 @@ export default class StoryEngine {
         nameOffsetX: this.isPortraitLayout() ? -5 : 0,
       });
       if (isStageAfterDeath) {
-        this.drawBody(w * 0.49, stageTop + stageH * 0.64, w * 0.2, stageH * 0.105);
+        this.drawBody(w * 0.49, stageTop + stageH * 0.83, w * 0.2, stageH * 0.105);
       } else {
         this.drawCharacter('男伶', w * 0.57, stageTop + stageH * 0.43, '#3f5f72', {
           width: Math.min(108 * maxCharacterScale, w * 0.098 * characterScale),
@@ -1134,7 +1140,7 @@ export default class StoryEngine {
   drawBody(x, y, w, h) {
     const image = this.characterImages['谢无咎'] && this.characterImages['谢无咎'].body;
     if (image && image.loaded) {
-      this.drawImageContain(image, x - w * 0.08, y - h * 1.25, w * 1.16, h * 2.8);
+      this.drawImageContain(image, x - w * 0.08, y - h * 2.1, w * 1.16, h * 2.1);
     } else {
       this.roundRect(x, y, w, h, h / 2, '#ddd4c5', '#8b806d');
       this.ctx.fillStyle = '#1d1f25';
