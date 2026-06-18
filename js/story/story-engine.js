@@ -39,6 +39,13 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.12',
+    date: '2026-06-18',
+    items: [
+      '昭雪在“从沈清和袖中探出头”的旁白出现时同步登场，不再等对话框关闭后才出现。',
+    ],
+  },
+  {
     version: '1.11',
     date: '2026-06-18',
     items: [
@@ -373,7 +380,7 @@ export default class StoryEngine {
 
   shouldShowZhaoxueAtDoor() {
     const scene = this.getScene();
-    return Boolean(scene && scene.id === 'front-door' && this.stepIndex > 3);
+    return Boolean(scene && scene.id === 'front-door' && this.stepIndex >= 3);
   }
 
   shouldShowZhangguiAtDoor() {
