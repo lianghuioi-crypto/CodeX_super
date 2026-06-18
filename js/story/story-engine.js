@@ -39,6 +39,14 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.10',
+    date: '2026-06-18',
+    items: [
+      '交互点击区域的虚线框改为缓慢闪动，提升可点击提示的辨识度。',
+      '对项目图片资源进行轻量压缩，在尽量保留观感的前提下提升启动加载效率。',
+    ],
+  },
+  {
     version: '1.9',
     date: '2026-06-18',
     items: [
@@ -1104,17 +1112,34 @@ export default class StoryEngine {
   }
 
   drawPulseRect(x, y, w, h, label) {
+    const pulse = (Math.sin(Date.now() / 720) + 1) / 2;
+    const fillAlpha = 0.08 + pulse * 0.16;
+    const strokeAlpha = 0.42 + pulse * 0.5;
+    const glowAlpha = 0.2 + pulse * 0.26;
     this.ctx.save();
-    this.ctx.strokeStyle = '#f0d28c';
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6, 5]);
-    this.roundRect(x, y, w, h, 8, 'rgba(232,190,100,0.16)', '#f0d28c');
+    this.ctx.lineDashOffset = -Date.now() / 520;
+    this.ctx.shadowColor = 'rgba(240, 210, 140, ' + glowAlpha + ')';
+    this.ctx.shadowBlur = 8 + pulse * 8;
+    this.roundRect(
+      x,
+      y,
+      w,
+      h,
+      8,
+      'rgba(232,190,100,' + fillAlpha.toFixed(3) + ')',
+      'rgba(240,210,140,' + strokeAlpha.toFixed(3) + ')'
+    );
     this.ctx.restore();
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.74 + pulse * 0.26;
     this.ctx.fillStyle = '#fff1d5';
     this.ctx.font = 'bold 13px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.fillText(label, x + w / 2, y + h / 2 + 5);
     this.ctx.textAlign = 'left';
+    this.ctx.restore();
   }
 
   drawLoadingScreen() {
