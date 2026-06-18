@@ -39,6 +39,14 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.11',
+    date: '2026-06-18',
+    items: [
+      '下方对话框改为米白底色、棕色小字号正文，并支持关键信息、人名、地点标红加粗。',
+      '小伶人喊出镜中有人后新增幕布式转场动画，再切换到倚云楼门口下一幕。',
+    ],
+  },
+  {
     version: '1.10',
     date: '2026-06-18',
     items: [
@@ -163,6 +171,7 @@ export default class StoryEngine {
     this.activeSpeaker = '';
     this.overlay = 'loading';
     this.changelogPage = 0;
+    this.transition = null;
     this.assetTotal = 0;
     this.assetLoaded = 0;
     this.assetFailed = 0;
@@ -181,6 +190,7 @@ export default class StoryEngine {
     this.inventory = [];
     this.mergeProgress = {};
     this.finished = false;
+    this.transition = null;
     this.overlay = this.assetsReady ? 'changelog' : 'loading';
     this.changelogPage = 0;
     if (this.assetsReady) {
@@ -190,6 +200,9 @@ export default class StoryEngine {
 
   handleTap(x, y) {
     if (!this.assetsReady) {
+      return;
+    }
+    if (this.transition) {
       return;
     }
 
@@ -208,7 +221,12 @@ export default class StoryEngine {
     this.advance();
   }
 
-  update() {}
+  update() {
+    if (this.transition && Date.now() - this.transition.startedAt >= this.transition.duration) {
+      this.transition = null;
+      this.goToNextScene();
+    }
+  }
 
   render() {
     const size = this.getSize();
@@ -223,9 +241,12 @@ export default class StoryEngine {
     this.drawBackground();
     this.drawScene();
     this.drawHud();
-    this.drawCurrentStep();
-    this.drawTopControls();
+    if (!this.transition) {
+      this.drawCurrentStep();
+      this.drawTopControls();
+    }
     this.drawToast();
+    this.drawTransition();
     this.drawOverlay();
   }
 
@@ -252,17 +273,47 @@ export default class StoryEngine {
       return;
     }
 
+    const wasLastStep = this.stepIndex >= scene.steps.length - 1;
+    const shouldTransition = this.shouldPlaySceneTransition(scene, this.getStep());
+    if (wasLastStep && shouldTransition) {
+      this.startSceneTransition(scene);
+      return;
+    }
+
     this.stepIndex += 1;
     if (this.stepIndex >= scene.steps.length) {
-      this.sceneIndex += 1;
-      this.stepIndex = 0;
-      if (this.sceneIndex >= this.story.scenes.length) {
-        this.finished = true;
-        this.onComplete();
-      } else {
-        this.showToast(this.getScene().title);
-      }
+      this.goToNextScene();
     }
+  }
+
+  goToNextScene() {
+    this.sceneIndex += 1;
+    this.stepIndex = 0;
+    if (this.sceneIndex >= this.story.scenes.length) {
+      this.finished = true;
+      this.onComplete();
+    } else {
+      this.showToast(this.getScene().title);
+    }
+  }
+
+  shouldPlaySceneTransition(scene, step) {
+    return Boolean(
+      scene &&
+        step &&
+        scene.id === 'stage-open' &&
+        step.type === 'dialog' &&
+        step.speaker === '小伶人'
+    );
+  }
+
+  startSceneTransition(scene) {
+    this.transition = {
+      startedAt: Date.now(),
+      duration: 1350,
+      fromTitle: scene.title,
+      toTitle: this.story.scenes[this.sceneIndex + 1] && this.story.scenes[this.sceneIndex + 1].title,
+    };
   }
 
   queueMessages(messages, shouldAdvance) {
@@ -621,7 +672,7 @@ export default class StoryEngine {
     const textX = x + 20 + (hasAvatar ? avatarSize + 14 : 0);
     const textMaxW = w - 40 - (hasAvatar ? avatarSize + 14 : 0);
 
-    this.roundRect(x, y, w, h, 8, 'rgba(15,18,24,0.92)', 'rgba(226,196,140,0.55)');
+    this.roundRect(x, y, w, h, 8, 'rgba(246,237,218,0.96)', 'rgba(178,130,76,0.72)');
     this.roundRect(x + 14, y - 18, Math.min(160, this.width * 0.42), 36, 6, '#7d2633', '#d5a764');
     this.ctx.fillStyle = '#fff1d5';
     this.ctx.font = 'bold 16px Arial';
@@ -629,10 +680,8 @@ export default class StoryEngine {
     if (hasAvatar) {
       this.drawAvatarIcon(normalizedSpeaker, x + 20, y + 46, avatarSize);
     }
-    this.ctx.fillStyle = '#f8efe4';
-    this.ctx.font = '17px Arial';
-    this.wrapText(text, textX, y + 50, textMaxW, 27, 4);
-    this.ctx.fillStyle = '#b7d7ce';
+    this.drawRichText(text, textX, y + 50, textMaxW, 23, 4, 15);
+    this.ctx.fillStyle = '#8a6d54';
     this.ctx.font = '12px Arial';
     this.ctx.textAlign = 'right';
     this.ctx.fillText(hint, x + w - 18, y + h - 18);
@@ -649,15 +698,13 @@ export default class StoryEngine {
     const w = this.width - 32;
     const h = this.height * (isPortrait ? 0.25 : 0.25);
     const nameW = Math.min(isPortrait ? 126 : 150, this.width * 0.42);
-    this.roundRect(x, y, w, h, 8, 'rgba(15,18,24,0.92)', 'rgba(126,171,214,0.62)');
+    this.roundRect(x, y, w, h, 8, 'rgba(246,237,218,0.96)', 'rgba(126,171,214,0.72)');
     this.roundRect(x + 14, y - 18, nameW, 36, 6, '#315d7d', '#8dc7f0');
     this.ctx.fillStyle = '#fff1d5';
     this.ctx.font = 'bold 16px Arial';
     this.ctx.fillText(speaker, x + 28, y + 5);
-    this.ctx.fillStyle = '#f8efe4';
-    this.ctx.font = '17px Arial';
-    this.wrapText(text, x + 20, y + 50, w - 40, 27, 4);
-    this.ctx.fillStyle = '#b7d7ce';
+    this.drawRichText(text, x + 20, y + 50, w - 40, 23, 4, 15);
+    this.ctx.fillStyle = '#8a6d54';
     this.ctx.font = '12px Arial';
     this.ctx.textAlign = 'right';
     this.ctx.fillText(hint, x + w - 18, y + h - 18);
@@ -1192,6 +1239,48 @@ export default class StoryEngine {
     ctx.textAlign = 'left';
   }
 
+  drawTransition() {
+    if (!this.transition) {
+      return;
+    }
+    const ctx = this.ctx;
+    const elapsed = Date.now() - this.transition.startedAt;
+    const progress = Math.min(1, elapsed / this.transition.duration);
+    const fadeIn = Math.min(1, progress * 2.2);
+    const fadeOut = progress > 0.62 ? 1 - (progress - 0.62) / 0.38 : 1;
+    const alpha = Math.max(0, Math.min(fadeIn, fadeOut));
+    const curtain = Math.min(1, progress * 1.35);
+    const leftW = this.width * 0.5 * curtain;
+    const rightX = this.width - leftW;
+
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = '#16080c';
+    ctx.fillRect(0, 0, leftW, this.height);
+    ctx.fillRect(rightX, 0, leftW, this.height);
+
+    const stripeW = Math.max(10, this.width * 0.035);
+    ctx.globalAlpha = 0.22 * curtain;
+    ctx.fillStyle = '#8d2635';
+    for (let x = 0; x < leftW; x += stripeW * 2) {
+      ctx.fillRect(x, 0, stripeW, this.height);
+    }
+    for (let x = rightX; x < this.width; x += stripeW * 2) {
+      ctx.fillRect(x, 0, stripeW, this.height);
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 22px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('幕落', this.width / 2, this.height * 0.43);
+    ctx.fillStyle = '#d5a764';
+    ctx.font = '14px Arial';
+    ctx.fillText(this.transition.toTitle || '下一幕', this.width / 2, this.height * 0.43 + 34);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
   drawToast() {
     if (!this.toast || Date.now() > this.toastUntil) {
       return;
@@ -1328,6 +1417,99 @@ export default class StoryEngine {
     ctx.arc(x + radius, y + radius, radius, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
+  }
+
+  drawRichText(text, x, y, maxWidth, lineHeight, maxLines, fontSize) {
+    const ctx = this.ctx;
+    const tokens = this.tokenizeRichText(text);
+    let cursorX = x;
+    let cursorY = y;
+    let lines = 1;
+    tokens.forEach((token) => {
+      const chars = token.text.split('');
+      chars.forEach((char) => {
+        const style = token.highlight ? 'bold ' : '';
+        ctx.font = style + fontSize + 'px Arial';
+        const charW = ctx.measureText(char).width;
+        if (cursorX + charW > x + maxWidth && cursorX > x) {
+          lines += 1;
+          if (lines > maxLines) {
+            return;
+          }
+          cursorX = x;
+          cursorY += lineHeight;
+        }
+        if (lines > maxLines) {
+          return;
+        }
+        ctx.fillStyle = token.highlight ? '#b52d32' : '#6f442b';
+        ctx.fillText(char, cursorX, cursorY);
+        cursorX += charW;
+      });
+    });
+  }
+
+  tokenizeRichText(text) {
+    const source = String(text);
+    const keywords = this.getRichTextKeywords().filter((word) => source.includes(word));
+    if (!keywords.length) {
+      return [{ text: source, highlight: false }];
+    }
+
+    const tokens = [];
+    let index = 0;
+    while (index < source.length) {
+      const match = keywords.find((word) => source.slice(index, index + word.length) === word);
+      if (match) {
+        tokens.push({ text: match, highlight: true });
+        index += match.length;
+        continue;
+      }
+      let nextIndex = source.length;
+      keywords.forEach((word) => {
+        const found = source.indexOf(word, index + 1);
+        if (found !== -1) {
+          nextIndex = Math.min(nextIndex, found);
+        }
+      });
+      tokens.push({ text: source.slice(index, nextIndex), highlight: false });
+      index = nextIndex;
+    }
+    return tokens;
+  }
+
+  getRichTextKeywords() {
+    return [
+      '沈清和',
+      '谢无咎',
+      '绯衣娘子',
+      '昭雪',
+      '掌柜',
+      '女伶',
+      '男伶',
+      '小伶人',
+      '大理寺',
+      '倚云楼',
+      '绮云楼',
+      '长安',
+      '铜镜',
+      '耳坠',
+      '衣襟',
+      '喉间',
+      '右手',
+      '黑粉',
+      '细粉',
+      '指痕',
+      '勒痕',
+      '鬼掐喉',
+      '命案',
+      '索命',
+      '尸体',
+      '女鬼',
+      '大门',
+      '戏台',
+      '后台',
+    ].sort((a, b) => b.length - a.length);
   }
 
   wrapText(text, x, y, maxWidth, lineHeight, maxLines) {
