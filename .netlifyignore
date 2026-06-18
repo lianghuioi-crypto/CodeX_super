@@ -1,0 +1,8 @@
+.DS_Store
+project.config.json
+project.private.config.json
+game.js
+game.json
+README.md
+*.html
+!index.html

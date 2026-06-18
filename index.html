@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+  />
+  <meta name="format-detection" content="telephone=no" />
+  <title>绯衣鬼戏剧情体验器</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #08090c;
+      touch-action: none;
+      overscroll-behavior: none;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      user-select: none;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #08090c;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      touch-action: none;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+  </div>
+  <script type="module" src="./web-game.js"></script>
+</body>
+</html>
