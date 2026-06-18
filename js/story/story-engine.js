@@ -38,9 +38,19 @@ const PROP_ASSETS = {
   qiyunStage: 'images/scenes/qiyun-stage.jpg',
   qiyunDoorOpen: 'images/scenes/qiyun-door-open.jpg',
   qiyunDoorClosed: 'images/scenes/qiyun-door-closed.png',
+  backstageDoor: 'images/scenes/backstage-door.jpg',
 };
 
 const CHANGELOG = [
+  {
+    version: '1.16',
+    date: '2026-06-18',
+    items: [
+      '替换倚云楼出将门场景资源，并纳入启动预加载。',
+      '谢无咎尸体在戏台和尸检场景中统一向下移动30像素，让落点更贴近地板。',
+      '下调铜镜位置，使铜镜与角色处于更接近的同一视觉水平线。',
+    ],
+  },
   {
     version: '1.15',
     date: '2026-06-18',
@@ -578,7 +588,7 @@ export default class StoryEngine {
         });
       }
     } else if (scene.id === 'body-check') {
-      this.drawBody(w * 0.4, stageTop + stageH * 0.83, w * 0.2, stageH * 0.105);
+      this.drawBody(w * 0.4, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
       this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.48, '#31516b', {
         width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
         height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
@@ -592,10 +602,7 @@ export default class StoryEngine {
         height: Math.min(136 * maxCharacterScale, stageH * 0.4 * characterScale),
       });
     } else if (scene.id === 'backstage-door') {
-      this.roundRect(w * 0.34, stageTop + stageH * 0.08, w * 0.32, stageH * 0.62, 4, '#060608', '#6d1e2b');
-      ctx.fillStyle = '#8f2635';
-      ctx.fillRect(w * 0.34, stageTop + stageH * 0.08, w * 0.18, stageH * 0.46);
-      this.drawLabel('出将', w * 0.37, stageTop + stageH * 0.26, w * 0.12, 34, '#f0d29a');
+      this.drawBackstageDoorBackground(w * 0.06, stageTop, w * 0.88, stageH);
       this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.34, '#31516b', {
         width: Math.min(130 * maxCharacterScale, w * 0.12 * characterScale),
         height: Math.min(170 * maxCharacterScale, stageH * 0.51 * characterScale),
@@ -618,7 +625,7 @@ export default class StoryEngine {
         nameOffsetX: this.isPortraitLayout() ? -5 : 0,
       });
       if (isStageAfterDeath) {
-        this.drawBody(w * 0.49, stageTop + stageH * 0.83, w * 0.2, stageH * 0.105);
+        this.drawBody(w * 0.49, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
       } else {
         this.drawCharacter('男伶', w * 0.57, stageTop + stageH * 0.43, '#3f5f72', {
           width: Math.min(108 * maxCharacterScale, w * 0.098 * characterScale),
@@ -627,7 +634,7 @@ export default class StoryEngine {
         });
       }
       const mirrorW = Math.min(62, w * 0.13);
-      this.drawMirror(w * 0.72, stageTop + stageH * 0.28, mirrorW, stageH * 0.2, isStageAfterDeath);
+      this.drawMirror(w * 0.72, stageTop + stageH * 0.43, mirrorW, stageH * 0.2, isStageAfterDeath);
     }
 
     scene.notes.forEach((note, index) => {
@@ -693,6 +700,53 @@ export default class StoryEngine {
     ctx.restore();
 
     this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.38)');
+  }
+
+  drawBackstageDoorBackground(x, y, w, h) {
+    const ctx = this.ctx;
+    const image = this.propImages.backstageDoor;
+    ctx.save();
+    if (image && image.loaded) {
+      this.drawBackstageImageCover(image, x, y, w, h, 8);
+    } else {
+      this.roundRect(x, y, w, h, 8, '#33201b', '#d8a65d');
+    }
+
+    const shade = ctx.createLinearGradient(0, y, 0, y + h);
+    shade.addColorStop(0, 'rgba(40, 18, 12, 0.02)');
+    shade.addColorStop(0.56, 'rgba(40, 18, 12, 0.04)');
+    shade.addColorStop(1, 'rgba(20, 8, 6, 0.28)');
+    ctx.fillStyle = shade;
+    this.clipRoundRect(x, y, w, h, 8);
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+
+    this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
+  }
+
+  drawBackstageImageCover(image, x, y, w, h, radius) {
+    const iw = image.naturalWidth || image.width;
+    const ih = image.naturalHeight || image.height;
+    if (!iw || !ih) {
+      return;
+    }
+
+    const targetRatio = w / h;
+    let sx = 0;
+    let sy = ih * 0.02;
+    let sh = ih * 0.94;
+    let sw = sh * targetRatio;
+    if (sw > iw) {
+      sw = iw;
+      sh = sw / targetRatio;
+      sy = ih * 0.04;
+    }
+    sx = Math.min(Math.max(0, iw * 0.5 - sw * 0.42), iw - sw);
+
+    this.ctx.save();
+    this.clipRoundRect(x, y, w, h, radius);
+    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.ctx.restore();
   }
 
   drawDoorImageCover(image, x, y, w, h, radius) {
