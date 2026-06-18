@@ -35,9 +35,18 @@ const CHARACTER_ASSETS = {
 
 const PROP_ASSETS = {
   mirrorGhost: 'images/props/tongjing-nvgui.png',
+  qiyunStage: 'images/scenes/qiyun-stage.jpg',
 };
 
 const CHANGELOG = [
+  {
+    version: '1.13',
+    date: '2026-06-18',
+    items: [
+      '绮云楼戏台场景替换为正式背景图，并纳入启动预加载。',
+      '重新调整戏台场景角色站位和大小，让人物与远景舞台比例更协调。',
+    ],
+  },
   {
     version: '1.12',
     date: '2026-06-18',
@@ -503,10 +512,15 @@ export default class StoryEngine {
     const characterScale = isPortrait ? 1.18 : 1;
     const maxCharacterScale = isPortrait ? 1.16 : 1;
     const isStageAfterDeath = this.isStageAfterDeathReveal();
+    const usesStageArt = scene.id === 'stage-open' || scene.id === 'body-check';
 
-    this.roundRect(w * 0.08, stageTop, w * 0.84, stageH, 8, '#25212a', '#735244');
-    ctx.fillStyle = '#15171c';
-    ctx.fillRect(w * 0.12, stageTop + stageH * 0.72, w * 0.76, stageH * 0.16);
+    if (usesStageArt) {
+      this.drawStageArtBackground(w * 0.06, stageTop, w * 0.88, stageH);
+    } else {
+      this.roundRect(w * 0.08, stageTop, w * 0.84, stageH, 8, '#25212a', '#735244');
+      ctx.fillStyle = '#15171c';
+      ctx.fillRect(w * 0.12, stageTop + stageH * 0.72, w * 0.76, stageH * 0.16);
+    }
 
     if (scene.id === 'front-door') {
       const showZhaoxue = this.shouldShowZhaoxueAtDoor();
@@ -530,18 +544,18 @@ export default class StoryEngine {
         });
       }
     } else if (scene.id === 'body-check') {
-      this.drawBody(w * 0.39, stageTop + stageH * 0.43, w * 0.238, stageH * 0.14);
-      this.drawCharacter('沈清和', w * 0.12, stageTop + stageH * 0.31, '#31516b', {
-        width: Math.min(128 * maxCharacterScale, w * 0.11 * characterScale),
-        height: Math.min(166 * maxCharacterScale, stageH * 0.5 * characterScale),
-      });
-      this.drawCharacter('昭雪', w * 0.27, stageTop + stageH * 0.54, '#d8d1bf', {
-        width: Math.min(88 * maxCharacterScale, w * 0.08 * characterScale),
-        height: Math.min(106 * maxCharacterScale, stageH * 0.32 * characterScale),
-      });
-      this.drawCharacter('掌柜', w * 0.73, stageTop + stageH * 0.39, '#476a70', {
+      this.drawBody(w * 0.4, stageTop + stageH * 0.58, w * 0.2, stageH * 0.105);
+      this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.48, '#31516b', {
         width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
-        height: Math.min(150 * maxCharacterScale, stageH * 0.45 * characterScale),
+        height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
+      });
+      this.drawCharacter('昭雪', w * 0.29, stageTop + stageH * 0.62, '#d8d1bf', {
+        width: Math.min(78 * maxCharacterScale, w * 0.072 * characterScale),
+        height: Math.min(94 * maxCharacterScale, stageH * 0.28 * characterScale),
+      });
+      this.drawCharacter('掌柜', w * 0.72, stageTop + stageH * 0.51, '#476a70', {
+        width: Math.min(102 * maxCharacterScale, w * 0.09 * characterScale),
+        height: Math.min(136 * maxCharacterScale, stageH * 0.4 * characterScale),
       });
     } else if (scene.id === 'backstage-door') {
       this.roundRect(w * 0.34, stageTop + stageH * 0.08, w * 0.32, stageH * 0.62, 4, '#060608', '#6d1e2b');
@@ -557,29 +571,29 @@ export default class StoryEngine {
         height: Math.min(112 * maxCharacterScale, stageH * 0.34 * characterScale),
       });
     } else {
-      this.drawCharacter('女伶', w * 0.23, stageTop + stageH * 0.26, '#b52d3a', {
-        width: Math.min(150 * maxCharacterScale, w * 0.13 * characterScale),
-        height: Math.min(202 * maxCharacterScale, stageH * 0.61 * characterScale),
+      this.drawCharacter('女伶', w * 0.31, stageTop + stageH * 0.43, '#b52d3a', {
+        width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
+        height: Math.min(152 * maxCharacterScale, stageH * 0.45 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? 2 : 0,
         talkOffsetX: this.isPortraitLayout() ? 8 : 0,
         talkOffsetY: this.isPortraitLayout() ? -2 : 0,
       });
-      this.drawCharacter('小伶人', w * 0.13, stageTop + stageH * 0.42, '#d29d82', {
-        width: Math.min(88 * maxCharacterScale, w * 0.075 * characterScale),
-        height: Math.min(122 * maxCharacterScale, stageH * 0.37 * characterScale),
+      this.drawCharacter('小伶人', w * 0.2, stageTop + stageH * 0.54, '#d29d82', {
+        width: Math.min(70 * maxCharacterScale, w * 0.064 * characterScale),
+        height: Math.min(96 * maxCharacterScale, stageH * 0.28 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? -5 : 0,
       });
       if (isStageAfterDeath) {
-        this.drawBody(w * 0.49, stageTop + stageH * 0.6, w * 0.238, stageH * 0.14);
+        this.drawBody(w * 0.49, stageTop + stageH * 0.64, w * 0.2, stageH * 0.105);
       } else {
-        this.drawCharacter('男伶', w * 0.53, stageTop + stageH * 0.27, '#3f5f72', {
-          width: Math.min(146 * maxCharacterScale, w * 0.13 * characterScale),
-          height: Math.min(196 * maxCharacterScale, stageH * 0.58 * characterScale),
+        this.drawCharacter('男伶', w * 0.57, stageTop + stageH * 0.43, '#3f5f72', {
+          width: Math.min(108 * maxCharacterScale, w * 0.098 * characterScale),
+          height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
           talkOffsetX: this.isPortraitLayout() ? 6 : 0,
         });
       }
-      const mirrorW = Math.min(86, w * 0.16);
-      this.drawMirror(w * 0.71, stageTop + stageH * 0.16, mirrorW, stageH * 0.27, isStageAfterDeath);
+      const mirrorW = Math.min(62, w * 0.13);
+      this.drawMirror(w * 0.72, stageTop + stageH * 0.28, mirrorW, stageH * 0.2, isStageAfterDeath);
     }
 
     scene.notes.forEach((note, index) => {
@@ -591,6 +605,63 @@ export default class StoryEngine {
       ctx.font = '12px Arial';
       ctx.fillText(note, chipX + 8, chipY + 15);
     });
+  }
+
+  drawStageArtBackground(x, y, w, h) {
+    const ctx = this.ctx;
+    const image = this.propImages.qiyunStage;
+    ctx.save();
+    if (image && image.loaded) {
+      this.drawStageImageCover(image, x, y, w, h, 8);
+    } else {
+      this.roundRect(x, y, w, h, 8, '#25212a', '#735244');
+    }
+
+    const shade = ctx.createLinearGradient(0, y, 0, y + h);
+    shade.addColorStop(0, 'rgba(5, 10, 14, 0.04)');
+    shade.addColorStop(0.55, 'rgba(5, 10, 14, 0.08)');
+    shade.addColorStop(1, 'rgba(5, 10, 14, 0.34)');
+    ctx.fillStyle = shade;
+    this.clipRoundRect(x, y, w, h, 8);
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+
+    this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
+  }
+
+  drawStageImageCover(image, x, y, w, h, radius) {
+    const iw = image.naturalWidth || image.width;
+    const ih = image.naturalHeight || image.height;
+    if (!iw || !ih) {
+      return;
+    }
+
+    const targetRatio = w / h;
+    let sx = 0;
+    let sy = 0;
+    let sw = iw;
+    let sh = ih;
+
+    if (targetRatio < 1.05) {
+      sh = ih * 0.78;
+      sw = Math.min(iw, sh * targetRatio);
+      sx = (iw - sw) / 2;
+      sy = ih * 0.045;
+    } else {
+      const sourceRatio = iw / ih;
+      if (sourceRatio > targetRatio) {
+        sw = ih * targetRatio;
+        sx = (iw - sw) / 2;
+      } else {
+        sh = iw / targetRatio;
+        sy = Math.max(0, (ih - sh) * 0.42);
+      }
+    }
+
+    this.ctx.save();
+    this.clipRoundRect(x, y, w, h, radius);
+    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.ctx.restore();
   }
 
   drawHud() {
