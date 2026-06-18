@@ -39,6 +39,15 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.8',
+    date: '2026-06-18',
+    items: [
+      '非角色对话框恢复到底部显示，名字框改为蓝色。',
+      '修复手机竖屏下更新日志翻页按钮与开始按钮重叠。',
+      '重新调整竖屏角色头顶姓名与省略号气泡位置。',
+    ],
+  },
+  {
     version: '1.7',
     date: '2026-06-18',
     items: [
@@ -270,6 +279,10 @@ export default class StoryEngine {
     return Boolean(this.normalizeSpeaker(speaker));
   }
 
+  isPortraitLayout() {
+    return this.height > this.width * 1.25;
+  }
+
   isStageAfterDeathReveal() {
     const scene = this.getScene();
     return Boolean(scene && scene.id === 'stage-open' && this.stepIndex > 2);
@@ -427,10 +440,14 @@ export default class StoryEngine {
       this.drawCharacter('女伶', w * 0.23, stageTop + stageH * 0.26, '#b52d3a', {
         width: Math.min(150 * maxCharacterScale, w * 0.13 * characterScale),
         height: Math.min(202 * maxCharacterScale, stageH * 0.61 * characterScale),
+        nameOffsetX: this.isPortraitLayout() ? 2 : 0,
+        talkOffsetX: this.isPortraitLayout() ? 8 : 0,
+        talkOffsetY: this.isPortraitLayout() ? -2 : 0,
       });
       this.drawCharacter('小伶人', w * 0.13, stageTop + stageH * 0.42, '#d29d82', {
         width: Math.min(88 * maxCharacterScale, w * 0.075 * characterScale),
         height: Math.min(122 * maxCharacterScale, stageH * 0.37 * characterScale),
+        nameOffsetX: this.isPortraitLayout() ? -5 : 0,
       });
       if (isStageAfterDeath) {
         this.drawBody(w * 0.49, stageTop + stageH * 0.6, w * 0.238, stageH * 0.14);
@@ -438,6 +455,7 @@ export default class StoryEngine {
         this.drawCharacter('男伶', w * 0.53, stageTop + stageH * 0.27, '#3f5f72', {
           width: Math.min(146 * maxCharacterScale, w * 0.13 * characterScale),
           height: Math.min(196 * maxCharacterScale, stageH * 0.58 * characterScale),
+          talkOffsetX: this.isPortraitLayout() ? 6 : 0,
         });
       }
       const mirrorW = Math.min(86, w * 0.16);
@@ -563,18 +581,20 @@ export default class StoryEngine {
   }
 
   drawNarrationDialog(speaker, text, hint, canAdvance = true) {
-    const w = Math.min(this.width - 42, 620);
-    const h = Math.min(this.height * 0.3, 190);
-    const x = (this.width - w) / 2;
-    const y = (this.height - h) / 2;
-    this.roundRect(x, y, w, h, 10, 'rgba(15,18,24,0.94)', 'rgba(226,196,140,0.58)');
-    this.roundRect(x + 18, y - 18, Math.min(132, w * 0.38), 34, 8, '#6f2831', '#d5a764');
+    const isPortrait = this.isPortraitLayout();
+    const x = 16;
+    const y = this.height * (isPortrait ? 0.7 : 0.7);
+    const w = this.width - 32;
+    const h = this.height * (isPortrait ? 0.25 : 0.25);
+    const nameW = Math.min(isPortrait ? 126 : 150, this.width * 0.42);
+    this.roundRect(x, y, w, h, 8, 'rgba(15,18,24,0.92)', 'rgba(126,171,214,0.62)');
+    this.roundRect(x + 14, y - 18, nameW, 36, 6, '#315d7d', '#8dc7f0');
     this.ctx.fillStyle = '#fff1d5';
     this.ctx.font = 'bold 16px Arial';
-    this.ctx.fillText(speaker, x + 34, y + 4);
+    this.ctx.fillText(speaker, x + 28, y + 5);
     this.ctx.fillStyle = '#f8efe4';
     this.ctx.font = '17px Arial';
-    this.wrapText(text, x + 24, y + 48, w - 48, 28, 4);
+    this.wrapText(text, x + 20, y + 50, w - 40, 27, 4);
     this.ctx.fillStyle = '#b7d7ce';
     this.ctx.font = '12px Arial';
     this.ctx.textAlign = 'right';
@@ -849,35 +869,53 @@ export default class StoryEngine {
     const drawX = x - (width - baseWidth) / 2;
     const drawY = y - (height - baseHeight);
     const image = this.characterImages[label] && this.characterImages[label].body;
+    const imageRect = this.getImageContainRect(image, drawX, drawY, width, height);
+    const visualRect = imageRect || { x: drawX, y: drawY, w: width, h: height };
     this.ctx.save();
     if (isActive) {
       this.drawActiveGlow(drawX, drawY, width, height);
     }
     if (image && image.loaded) {
-      this.drawImageContain(image, drawX, drawY, width, height);
+      this.ctx.drawImage(image, visualRect.x, visualRect.y, visualRect.w, visualRect.h);
     } else {
       this.roundRect(drawX, drawY, width, height, 8, color, '#e2c48c');
       this.roundRect(drawX + width * 0.28, drawY - height * 0.18, width * 0.44, width * 0.44, width * 0.22, '#e8d1b0', '#6d4e39');
     }
     this.ctx.restore();
-    this.drawNameBubble(label, drawX + width / 2, drawY - 8, isActive);
+    const bubbleCenterX = visualRect.x + visualRect.w / 2 + (options.nameOffsetX || 0);
+    const bubbleBottomY = visualRect.y - (this.isPortraitLayout() ? 6 : 8) + (options.nameOffsetY || 0);
+    const nameRect = this.drawNameBubble(label, bubbleCenterX, bubbleBottomY, isActive);
     if (isActive) {
-      this.drawTalkingBubble(drawX + width * 0.68, drawY + height * 0.04);
+      this.drawTalkingBubbleNear(nameRect, visualRect, options);
     }
   }
 
-  drawImageContain(image, x, y, w, h) {
+  getImageContainRect(image, x, y, w, h) {
+    if (!image || !image.loaded) {
+      return null;
+    }
     const iw = image.naturalWidth || image.width;
     const ih = image.naturalHeight || image.height;
     if (!iw || !ih) {
-      return;
+      return null;
     }
     const scale = Math.min(w / iw, h / ih);
     const dw = iw * scale;
     const dh = ih * scale;
-    const dx = x + (w - dw) / 2;
-    const dy = y + h - dh;
-    this.ctx.drawImage(image, dx, dy, dw, dh);
+    return {
+      x: x + (w - dw) / 2,
+      y: y + h - dh,
+      w: dw,
+      h: dh,
+    };
+  }
+
+  drawImageContain(image, x, y, w, h) {
+    const rect = this.getImageContainRect(image, x, y, w, h);
+    if (!rect) {
+      return;
+    }
+    this.ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
   }
 
   drawImageCover(image, x, y, w, h, radius) {
@@ -942,12 +980,14 @@ export default class StoryEngine {
   drawNameBubble(label, centerX, bottomY, isActive = false) {
     const ctx = this.ctx;
     ctx.save();
-    ctx.font = 'bold 13px Arial';
-    const paddingX = 12;
-    const bubbleW = Math.max(50, ctx.measureText(label).width + paddingX * 2);
-    const bubbleH = 26;
-    const x = centerX - bubbleW / 2;
-    const y = Math.max(88, bottomY - bubbleH);
+    const isPortrait = this.isPortraitLayout();
+    ctx.font = 'bold ' + (isPortrait ? 12 : 13) + 'px Arial';
+    const paddingX = isPortrait ? 10 : 12;
+    const bubbleW = Math.max(isPortrait ? 44 : 50, ctx.measureText(label).width + paddingX * 2);
+    const bubbleH = isPortrait ? 24 : 26;
+    const margin = 8;
+    const x = Math.max(margin, Math.min(this.width - bubbleW - margin, centerX - bubbleW / 2));
+    const y = Math.max(isPortrait ? 96 : 88, bottomY - bubbleH);
     this.roundRect(
       x,
       y,
@@ -959,16 +999,30 @@ export default class StoryEngine {
     );
     ctx.fillStyle = isActive ? '#4a231f' : '#5a2b24';
     ctx.textAlign = 'center';
-    ctx.fillText(label, centerX, y + 17);
+    ctx.fillText(label, x + bubbleW / 2, y + (isPortrait ? 16 : 17));
     ctx.textAlign = 'left';
     ctx.restore();
+    return { x, y, w: bubbleW, h: bubbleH };
   }
 
-  drawTalkingBubble(x, y) {
+  drawTalkingBubbleNear(nameRect, visualRect, options = {}) {
+    const isPortrait = this.isPortraitLayout();
+    const bubbleW = isPortrait ? 34 : 42;
+    const bubbleH = isPortrait ? 24 : 28;
+    const margin = 8;
+    let x = nameRect.x + nameRect.w - bubbleW * 0.18 + (options.talkOffsetX || 0);
+    let y = nameRect.y - bubbleH - 4 + (options.talkOffsetY || 0);
+    x = Math.max(margin, Math.min(this.width - bubbleW - margin, x));
+    y = Math.max(isPortrait ? 92 : 82, y);
+    if (y + bubbleH > visualRect.y - 2) {
+      y = Math.max(isPortrait ? 92 : 82, visualRect.y - bubbleH - 4);
+    }
+    this.drawTalkingBubble(x, y, bubbleW, bubbleH);
+  }
+
+  drawTalkingBubble(x, y, w = 42, h = 28) {
     const ctx = this.ctx;
     ctx.save();
-    const w = 42;
-    const h = 28;
     this.roundRect(x, y, w, h, 14, 'rgba(255,255,255,0.96)', 'rgba(118,82,56,0.65)');
     ctx.beginPath();
     ctx.moveTo(x + 10, y + h - 2);
@@ -980,9 +1034,9 @@ export default class StoryEngine {
     ctx.strokeStyle = 'rgba(118,82,56,0.42)';
     ctx.stroke();
     ctx.fillStyle = '#5a2b24';
-    ctx.font = 'bold 18px Arial';
+    ctx.font = 'bold ' + (w < 40 ? 16 : 18) + 'px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('...', x + w / 2, y + 17);
+    ctx.fillText('...', x + w / 2, y + (h < 26 ? 15 : 17));
     ctx.textAlign = 'left';
     ctx.restore();
   }
@@ -1068,25 +1122,28 @@ export default class StoryEngine {
       cursorY += 8;
     });
 
-    const btnW = Math.min(180, w - 48);
-    const btnX = x + w - btnW - 24;
+    const isPortrait = this.isPortraitLayout();
+    const btnW = Math.min(isPortrait ? 104 : 180, w - 48);
+    const btnX = x + w - btnW - (isPortrait ? 18 : 24);
     const btnY = y + h - 56;
     if (totalPages > 1) {
-      const pagerW = 92;
+      const pagerW = isPortrait ? 60 : 92;
+      const pagerH = isPortrait ? 34 : 38;
       if (page > 0) {
-        this.drawButton(x + 24, btnY, pagerW, 38, '上一页', () => {
+        this.drawButton(x + (isPortrait ? 18 : 20), btnY, pagerW, pagerH, '上一页', () => {
           this.changelogPage = page - 1;
-        }, { fontSize: 14, fill: '#35464a', stroke: '#9fd1c8' });
+        }, { fontSize: isPortrait ? 12 : 14, fill: '#35464a', stroke: '#9fd1c8' });
       }
       if (page < totalPages - 1) {
-        this.drawButton(x + 124, btnY, pagerW, 38, '下一页', () => {
+        const nextX = x + (isPortrait ? 18 : 20) + (page > 0 ? pagerW + 6 : 0);
+        this.drawButton(nextX, btnY, pagerW, pagerH, '下一页', () => {
           this.changelogPage = page + 1;
-        }, { fontSize: 14, fill: '#35464a', stroke: '#9fd1c8' });
+        }, { fontSize: isPortrait ? 12 : 14, fill: '#35464a', stroke: '#9fd1c8' });
       }
     }
-    this.drawButton(btnX, btnY, btnW, 38, '开始体验', () => {
+    this.drawButton(btnX, btnY, btnW, isPortrait ? 34 : 38, '开始体验', () => {
       this.overlay = '';
-    });
+    }, { fontSize: isPortrait ? 15 : 16 });
     ctx.restore();
   }
 
