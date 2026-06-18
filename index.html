@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+  />
+  <meta name="format-detection" content="telephone=no" />
+  <title>绯衣鬼戏剧情体验器</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #05070a;
+      touch-action: none;
+      overscroll-behavior: none;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      user-select: none;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #app {
+      width: auto;
+      height: min(100vh, 844px);
+      aspect-ratio: 390 / 844;
+      max-width: 100vw;
+      overflow: hidden;
+      background: #08090c;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 24px 80px rgba(0,0,0,0.45);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    @media (max-width: 480px) {
+      #app {
+        width: 100vw;
+        height: 100vh;
+        aspect-ratio: auto;
+        box-shadow: none;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+  </div>
+  <script type="module" src="./web-game.js"></script>
+</body>
+</html>

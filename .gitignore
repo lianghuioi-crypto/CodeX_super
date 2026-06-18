@@ -1,0 +1,7 @@
+# Local/system files
+.DS_Store
+.netlify
+project.private.config.json
+
+# Unrelated local documents
+第3次个人作业_建立超卓团队_团队计划表_V2.4-吕潇晖-增强版.html
