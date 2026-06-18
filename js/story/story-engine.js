@@ -39,6 +39,14 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.9',
+    date: '2026-06-18',
+    items: [
+      '新增启动资源加载页，进入剧情前预加载角色立绘、头像和铜镜女鬼道具图。',
+      '资源加载完成后再显示更新日志和剧情内容，减少体验过程中出现色块占位的问题。',
+    ],
+  },
+  {
     version: '1.8',
     date: '2026-06-18',
     items: [
@@ -145,13 +153,19 @@ export default class StoryEngine {
     this.characterImages = {};
     this.propImages = {};
     this.activeSpeaker = '';
-    this.overlay = 'changelog';
+    this.overlay = 'loading';
     this.changelogPage = 0;
-    this.loadCharacterImages();
-    this.loadPropImages();
+    this.assetTotal = 0;
+    this.assetLoaded = 0;
+    this.assetFailed = 0;
+    this.assetErrors = [];
+    this.assetsReady = false;
+    this.startRequested = false;
+    this.preloadAssets();
   }
 
   start() {
+    this.startRequested = true;
     this.sceneIndex = 0;
     this.stepIndex = 0;
     this.messageQueue = [];
@@ -159,12 +173,18 @@ export default class StoryEngine {
     this.inventory = [];
     this.mergeProgress = {};
     this.finished = false;
-    this.overlay = 'changelog';
+    this.overlay = this.assetsReady ? 'changelog' : 'loading';
     this.changelogPage = 0;
-    this.showToast('点击对话推进，点击发光区域调查');
+    if (this.assetsReady) {
+      this.showToast('点击对话推进，点击发光区域调查');
+    }
   }
 
   handleTap(x, y) {
+    if (!this.assetsReady) {
+      return;
+    }
+
     for (let i = this.regions.length - 1; i >= 0; i--) {
       const region = this.regions[i];
       if (x >= region.x && x <= region.x + region.w && y >= region.y && y <= region.y + region.h) {
@@ -187,6 +207,10 @@ export default class StoryEngine {
     this.width = size.width;
     this.height = size.height;
     this.regions = [];
+    if (!this.assetsReady) {
+      this.drawLoadingScreen();
+      return;
+    }
     this.activeSpeaker = this.getActiveSpeaker();
     this.drawBackground();
     this.drawScene();
@@ -309,29 +333,59 @@ export default class StoryEngine {
     this.toastUntil = Date.now() + 1800;
   }
 
-  loadCharacterImages() {
+  preloadAssets() {
+    const promises = [];
+    this.loadCharacterImages(promises);
+    this.loadPropImages(promises);
+    Promise.all(promises).then(() => {
+      this.assetsReady = true;
+      if (this.startRequested) {
+        this.overlay = 'changelog';
+        this.changelogPage = 0;
+        this.showToast('点击对话推进，点击发光区域调查');
+      }
+    });
+  }
+
+  loadCharacterImages(promises) {
     Object.entries(CHARACTER_ASSETS).forEach(([name, asset]) => {
       this.characterImages[name] = {
-        body: this.loadImage(asset.body),
-        avatar: this.loadImage(asset.avatar),
+        body: this.loadImage(asset.body, promises),
+        avatar: this.loadImage(asset.avatar, promises),
       };
     });
   }
 
-  loadPropImages() {
+  loadPropImages(promises) {
     Object.entries(PROP_ASSETS).forEach(([name, src]) => {
-      this.propImages[name] = this.loadImage(src);
+      this.propImages[name] = this.loadImage(src, promises);
     });
   }
 
-  loadImage(src) {
+  loadImage(src, promises) {
     const image = this.createImage();
-    image.onload = () => {
-      image.loaded = true;
-    };
-    image.onerror = () => {
-      image.failed = true;
-    };
+    this.assetTotal += 1;
+    const promise = new Promise((resolve) => {
+      const finish = (failed) => {
+        if (image.loaded || image.failed) {
+          resolve(image);
+          return;
+        }
+        if (failed) {
+          image.failed = true;
+          this.assetFailed += 1;
+          this.assetErrors.push(src);
+        } else {
+          image.loaded = true;
+          this.assetLoaded += 1;
+        }
+        resolve(image);
+      };
+
+      image.onload = () => finish(false);
+      image.onerror = () => finish(true);
+    });
+    promises.push(promise);
     image.src = src;
     return image;
   }
@@ -1061,6 +1115,56 @@ export default class StoryEngine {
     this.ctx.textAlign = 'center';
     this.ctx.fillText(label, x + w / 2, y + h / 2 + 5);
     this.ctx.textAlign = 'left';
+  }
+
+  drawLoadingScreen() {
+    const ctx = this.ctx;
+    const w = this.width;
+    const h = this.height;
+    const done = this.assetLoaded + this.assetFailed;
+    const total = Math.max(this.assetTotal, 1);
+    const progress = Math.min(1, done / total);
+    const panelW = Math.min(w - 48, 320);
+    const barW = panelW;
+    const barH = 12;
+    const centerX = w / 2;
+    const titleY = h * 0.36;
+    const barX = centerX - barW / 2;
+    const barY = h * 0.5;
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, '#1c2630');
+    gradient.addColorStop(0.58, '#151217');
+    gradient.addColorStop(1, '#07080b');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.globalAlpha = 0.26;
+    ctx.fillStyle = '#7d2633';
+    ctx.fillRect(0, h * 0.12, w, h * 0.08);
+    ctx.fillStyle = '#d5a764';
+    for (let i = 0; i < 7; i++) {
+      ctx.fillRect(w * (0.08 + i * 0.14), h * 0.13, w * 0.045, h * 0.045);
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('绯衣鬼戏', centerX, titleY);
+    ctx.fillStyle = '#b7d7ce';
+    ctx.font = '14px Arial';
+    ctx.fillText('资源加载中 ' + done + '/' + this.assetTotal, centerX, titleY + 34);
+
+    this.roundRect(barX, barY, barW, barH, barH / 2, 'rgba(255,255,255,0.12)', 'rgba(226,196,140,0.35)');
+    this.roundRect(barX, barY, Math.max(barH, barW * progress), barH, barH / 2, '#d5a764', '');
+
+    ctx.fillStyle = this.assetFailed ? '#e0b36a' : '#cfc4b8';
+    ctx.font = '12px Arial';
+    const status = this.assetFailed ? '部分资源加载失败，稍后将使用占位图继续' : '正在准备角色立绘与头像';
+    ctx.fillText(status, centerX, barY + 38);
+    ctx.textAlign = 'left';
   }
 
   drawToast() {
