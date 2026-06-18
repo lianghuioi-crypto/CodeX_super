@@ -36,9 +36,20 @@ const CHARACTER_ASSETS = {
 const PROP_ASSETS = {
   mirrorGhost: 'images/props/tongjing-nvgui.png',
   qiyunStage: 'images/scenes/qiyun-stage.jpg',
+  qiyunDoorOpen: 'images/scenes/qiyun-door-open.jpg',
+  qiyunDoorClosed: 'images/scenes/qiyun-door-closed.png',
 };
 
 const CHANGELOG = [
+  {
+    version: '1.14',
+    date: '2026-06-18',
+    items: [
+      '绮云楼门口替换为正式场景图，使用开门底图和关门叠层组合显示。',
+      '点击推开大门后，关闭门叠层会渐隐消失，形成开门过渡。',
+      '重新调整门口角色比例，并将掌柜站位修正到门框内。',
+    ],
+  },
   {
     version: '1.13',
     date: '2026-06-18',
@@ -188,6 +199,7 @@ export default class StoryEngine {
     this.overlay = 'loading';
     this.changelogPage = 0;
     this.transition = null;
+    this.doorOpenedAt = 0;
     this.assetTotal = 0;
     this.assetLoaded = 0;
     this.assetFailed = 0;
@@ -207,6 +219,7 @@ export default class StoryEngine {
     this.mergeProgress = {};
     this.finished = false;
     this.transition = null;
+    this.doorOpenedAt = 0;
     this.overlay = this.assetsReady ? 'changelog' : 'loading';
     this.changelogPage = 0;
     if (this.assetsReady) {
@@ -403,6 +416,21 @@ export default class StoryEngine {
     return this.stepIndex === 5 && this.messageQueue.length > 0;
   }
 
+  getDoorClosedAlpha() {
+    const scene = this.getScene();
+    if (!scene || scene.id !== 'front-door') {
+      return 0;
+    }
+    if (this.stepIndex < 5 && !this.doorOpenedAt) {
+      return 1;
+    }
+    if (!this.doorOpenedAt) {
+      return 0;
+    }
+    const progress = Math.min(1, (Date.now() - this.doorOpenedAt) / 900);
+    return Math.max(0, 1 - progress);
+  }
+
   showToast(text) {
     this.toast = text;
     this.toastUntil = Date.now() + 1800;
@@ -525,22 +553,22 @@ export default class StoryEngine {
     if (scene.id === 'front-door') {
       const showZhaoxue = this.shouldShowZhaoxueAtDoor();
       const showZhanggui = this.shouldShowZhangguiAtDoor();
-      this.roundRect(w * 0.34, stageTop + stageH * 0.08, w * 0.32, stageH * 0.62, 4, '#2c1715', '#d8a65d');
-      this.drawLabel('倚云楼', w * 0.42, stageTop + stageH * 0.2, w * 0.16, 28, '#e6c987');
-      this.drawCharacter('沈清和', w * 0.13, stageTop + stageH * 0.36, '#31516b', {
-        width: Math.min(136 * maxCharacterScale, w * 0.12 * characterScale),
-        height: Math.min(178 * maxCharacterScale, stageH * 0.54 * characterScale),
+      this.drawDoorSceneBackground(w * 0.06, stageTop, w * 0.88, stageH);
+      this.drawCharacter('沈清和', w * 0.17, stageTop + stageH * 0.53, '#31516b', {
+        width: Math.min(106 * maxCharacterScale, w * 0.098 * characterScale),
+        height: Math.min(138 * maxCharacterScale, stageH * 0.41 * characterScale),
       });
       if (showZhaoxue) {
-        this.drawCharacter('昭雪', w * 0.26, stageTop + stageH * 0.57, '#d8d1bf', {
-          width: Math.min(84 * maxCharacterScale, w * 0.075 * characterScale),
-          height: Math.min(104 * maxCharacterScale, stageH * 0.31 * characterScale),
+        this.drawCharacter('昭雪', w * 0.28, stageTop + stageH * 0.64, '#d8d1bf', {
+          width: Math.min(70 * maxCharacterScale, w * 0.064 * characterScale),
+          height: Math.min(86 * maxCharacterScale, stageH * 0.26 * characterScale),
         });
       }
       if (showZhanggui) {
-        this.drawCharacter('掌柜', w * 0.68, stageTop + stageH * 0.36, '#476a70', {
-          width: Math.min(118 * maxCharacterScale, w * 0.11 * characterScale),
-          height: Math.min(160 * maxCharacterScale, stageH * 0.48 * characterScale),
+        this.drawCharacter('掌柜', w * 0.62, stageTop + stageH * 0.5, '#476a70', {
+          width: Math.min(98 * maxCharacterScale, w * 0.088 * characterScale),
+          height: Math.min(132 * maxCharacterScale, stageH * 0.39 * characterScale),
+          nameOffsetX: this.isPortraitLayout() ? 4 : 0,
         });
       }
     } else if (scene.id === 'body-check') {
@@ -627,6 +655,72 @@ export default class StoryEngine {
     ctx.restore();
 
     this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
+  }
+
+  drawDoorSceneBackground(x, y, w, h) {
+    const ctx = this.ctx;
+    const openImage = this.propImages.qiyunDoorOpen;
+    const closedImage = this.propImages.qiyunDoorClosed;
+    const closedAlpha = this.getDoorClosedAlpha();
+
+    ctx.save();
+    if (openImage && openImage.loaded) {
+      this.drawDoorImageCover(openImage, x, y, w, h, 8);
+    } else {
+      this.roundRect(x, y, w, h, 8, '#1f2f36', '#d8a65d');
+    }
+
+    if (closedImage && closedImage.loaded && closedAlpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = closedAlpha;
+      this.drawDoorImageCover(closedImage, x, y, w, h, 8);
+      ctx.restore();
+    }
+
+    const shade = ctx.createLinearGradient(0, y, 0, y + h);
+    shade.addColorStop(0, 'rgba(5, 10, 14, 0.04)');
+    shade.addColorStop(0.62, 'rgba(5, 10, 14, 0.05)');
+    shade.addColorStop(1, 'rgba(5, 10, 14, 0.26)');
+    ctx.fillStyle = shade;
+    this.clipRoundRect(x, y, w, h, 8);
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+
+    this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.38)');
+  }
+
+  drawDoorImageCover(image, x, y, w, h, radius) {
+    const iw = image.naturalWidth || image.width;
+    const ih = image.naturalHeight || image.height;
+    if (!iw || !ih) {
+      return;
+    }
+
+    const targetRatio = w / h;
+    let sx = 0;
+    let sy = 0;
+    let sw = iw;
+    let sh = ih;
+    if (targetRatio < 1.05) {
+      sh = ih * 0.78;
+      sw = Math.min(iw, sh * targetRatio);
+      sx = (iw - sw) / 2;
+      sy = ih * 0.08;
+    } else {
+      const sourceRatio = iw / ih;
+      if (sourceRatio > targetRatio) {
+        sw = ih * targetRatio;
+        sx = (iw - sw) / 2;
+      } else {
+        sh = iw / targetRatio;
+        sy = (ih - sh) * 0.5;
+      }
+    }
+
+    this.ctx.save();
+    this.clipRoundRect(x, y, w, h, radius);
+    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.ctx.restore();
   }
 
   drawStageImageCover(image, x, y, w, h, radius) {
@@ -798,6 +892,9 @@ export default class StoryEngine {
       const rect = this.scaledRect(spot);
       this.drawPulseRect(rect.x, rect.y, rect.w, rect.h, spot.label);
       this.addRegion(rect.x, rect.y, rect.w, rect.h, () => {
+        if (spot.id === 'half-open-door' && !this.doorOpenedAt) {
+          this.doorOpenedAt = Date.now();
+        }
         this.queueMessages(spot.result || [], Boolean(spot.next));
       });
     });
