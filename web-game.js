@@ -2,6 +2,7 @@ import STORY_DATA from './js/story/story-data.js';
 import StoryEngine from './js/story/story-engine.js';
 
 const canvas = document.getElementById('game');
+const app = document.getElementById('app');
 const ctx = canvas.getContext('2d');
 
 const state = {
@@ -12,8 +13,9 @@ const state = {
 };
 
 function resize() {
-  state.width = window.innerWidth;
-  state.height = window.innerHeight;
+  const rect = app.getBoundingClientRect();
+  state.width = rect.width;
+  state.height = rect.height;
   canvas.width = Math.floor(state.width * state.dpr);
   canvas.height = Math.floor(state.height * state.dpr);
   canvas.style.width = state.width + 'px';

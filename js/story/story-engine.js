@@ -39,6 +39,14 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.7',
+    date: '2026-06-18',
+    items: [
+      '浏览器预览改为手机竖屏分辨率，桌面访问时居中显示手机画布。',
+      'Canvas 尺寸改为跟随手机预览容器，方便按手游比例验收画面。',
+    ],
+  },
+  {
     version: '1.6',
     date: '2026-06-18',
     items: [
@@ -356,8 +364,11 @@ export default class StoryEngine {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
+    const isPortrait = h > w * 1.25;
     const stageTop = h * 0.16;
-    const stageH = h * 0.48;
+    const stageH = h * (isPortrait ? 0.5 : 0.48);
+    const characterScale = isPortrait ? 1.18 : 1;
+    const maxCharacterScale = isPortrait ? 1.16 : 1;
     const isStageAfterDeath = this.isStageAfterDeathReveal();
 
     this.roundRect(w * 0.08, stageTop, w * 0.84, stageH, 8, '#25212a', '#735244');
@@ -370,34 +381,34 @@ export default class StoryEngine {
       this.roundRect(w * 0.34, stageTop + stageH * 0.08, w * 0.32, stageH * 0.62, 4, '#2c1715', '#d8a65d');
       this.drawLabel('倚云楼', w * 0.42, stageTop + stageH * 0.2, w * 0.16, 28, '#e6c987');
       this.drawCharacter('沈清和', w * 0.13, stageTop + stageH * 0.36, '#31516b', {
-        width: Math.min(136, w * 0.12),
-        height: Math.min(178, stageH * 0.54),
+        width: Math.min(136 * maxCharacterScale, w * 0.12 * characterScale),
+        height: Math.min(178 * maxCharacterScale, stageH * 0.54 * characterScale),
       });
       if (showZhaoxue) {
         this.drawCharacter('昭雪', w * 0.26, stageTop + stageH * 0.57, '#d8d1bf', {
-          width: Math.min(84, w * 0.075),
-          height: Math.min(104, stageH * 0.31),
+          width: Math.min(84 * maxCharacterScale, w * 0.075 * characterScale),
+          height: Math.min(104 * maxCharacterScale, stageH * 0.31 * characterScale),
         });
       }
       if (showZhanggui) {
         this.drawCharacter('掌柜', w * 0.68, stageTop + stageH * 0.36, '#476a70', {
-          width: Math.min(118, w * 0.11),
-          height: Math.min(160, stageH * 0.48),
+          width: Math.min(118 * maxCharacterScale, w * 0.11 * characterScale),
+          height: Math.min(160 * maxCharacterScale, stageH * 0.48 * characterScale),
         });
       }
     } else if (scene.id === 'body-check') {
       this.drawBody(w * 0.39, stageTop + stageH * 0.43, w * 0.238, stageH * 0.14);
       this.drawCharacter('沈清和', w * 0.12, stageTop + stageH * 0.31, '#31516b', {
-        width: Math.min(128, w * 0.11),
-        height: Math.min(166, stageH * 0.5),
+        width: Math.min(128 * maxCharacterScale, w * 0.11 * characterScale),
+        height: Math.min(166 * maxCharacterScale, stageH * 0.5 * characterScale),
       });
       this.drawCharacter('昭雪', w * 0.27, stageTop + stageH * 0.54, '#d8d1bf', {
-        width: Math.min(88, w * 0.08),
-        height: Math.min(106, stageH * 0.32),
+        width: Math.min(88 * maxCharacterScale, w * 0.08 * characterScale),
+        height: Math.min(106 * maxCharacterScale, stageH * 0.32 * characterScale),
       });
       this.drawCharacter('掌柜', w * 0.73, stageTop + stageH * 0.39, '#476a70', {
-        width: Math.min(112, w * 0.1),
-        height: Math.min(150, stageH * 0.45),
+        width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
+        height: Math.min(150 * maxCharacterScale, stageH * 0.45 * characterScale),
       });
     } else if (scene.id === 'backstage-door') {
       this.roundRect(w * 0.34, stageTop + stageH * 0.08, w * 0.32, stageH * 0.62, 4, '#060608', '#6d1e2b');
@@ -405,28 +416,28 @@ export default class StoryEngine {
       ctx.fillRect(w * 0.34, stageTop + stageH * 0.08, w * 0.18, stageH * 0.46);
       this.drawLabel('出将', w * 0.37, stageTop + stageH * 0.26, w * 0.12, 34, '#f0d29a');
       this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.34, '#31516b', {
-        width: Math.min(130, w * 0.12),
-        height: Math.min(170, stageH * 0.51),
+        width: Math.min(130 * maxCharacterScale, w * 0.12 * characterScale),
+        height: Math.min(170 * maxCharacterScale, stageH * 0.51 * characterScale),
       });
       this.drawCharacter('昭雪', w * 0.69, stageTop + stageH * 0.55, '#d8d1bf', {
-        width: Math.min(92, w * 0.08),
-        height: Math.min(112, stageH * 0.34),
+        width: Math.min(92 * maxCharacterScale, w * 0.08 * characterScale),
+        height: Math.min(112 * maxCharacterScale, stageH * 0.34 * characterScale),
       });
     } else {
       this.drawCharacter('女伶', w * 0.23, stageTop + stageH * 0.26, '#b52d3a', {
-        width: Math.min(150, w * 0.13),
-        height: Math.min(202, stageH * 0.61),
+        width: Math.min(150 * maxCharacterScale, w * 0.13 * characterScale),
+        height: Math.min(202 * maxCharacterScale, stageH * 0.61 * characterScale),
       });
       this.drawCharacter('小伶人', w * 0.13, stageTop + stageH * 0.42, '#d29d82', {
-        width: Math.min(88, w * 0.075),
-        height: Math.min(122, stageH * 0.37),
+        width: Math.min(88 * maxCharacterScale, w * 0.075 * characterScale),
+        height: Math.min(122 * maxCharacterScale, stageH * 0.37 * characterScale),
       });
       if (isStageAfterDeath) {
         this.drawBody(w * 0.49, stageTop + stageH * 0.6, w * 0.238, stageH * 0.14);
       } else {
         this.drawCharacter('男伶', w * 0.53, stageTop + stageH * 0.27, '#3f5f72', {
-          width: Math.min(146, w * 0.13),
-          height: Math.min(196, stageH * 0.58),
+          width: Math.min(146 * maxCharacterScale, w * 0.13 * characterScale),
+          height: Math.min(196 * maxCharacterScale, stageH * 0.58 * characterScale),
         });
       }
       const mirrorW = Math.min(86, w * 0.16);
@@ -467,15 +478,16 @@ export default class StoryEngine {
   }
 
   drawTopControls() {
-    const w = Math.min(108, this.width * 0.24);
-    const h = 34;
+    const isPortrait = this.height > this.width * 1.25;
+    const w = Math.min(isPortrait ? 82 : 108, this.width * (isPortrait ? 0.26 : 0.24));
+    const h = isPortrait ? 30 : 34;
     const x = this.width - w - 14;
-    const y = 48;
+    const y = isPortrait ? 46 : 48;
     this.drawButton(x, y, w, h, '更新日志', () => {
       this.overlay = 'changelog';
       this.changelogPage = 0;
     }, {
-      fontSize: 14,
+      fontSize: isPortrait ? 12 : 14,
       fill: 'rgba(43,58,61,0.88)',
       stroke: 'rgba(159,209,200,0.72)',
     });
