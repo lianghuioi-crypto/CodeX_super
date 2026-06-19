@@ -109,6 +109,7 @@ const STORY_DATA = {
               w: 0.44,
               h: 0.5,
               result: [{ speaker: '掌柜', text: '沈司案，人就在台上。小人们什么都没敢动。' }],
+              advanceBeforeResult: true,
               next: true,
             },
           ],

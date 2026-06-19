@@ -43,6 +43,13 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.17',
+    date: '2026-06-19',
+    items: [
+      '优化进入绮云楼后的节奏：点击进入后先切换到戏台尸检场景，再继续播放掌柜说明对话。',
+    ],
+  },
+  {
     version: '1.16',
     date: '2026-06-18',
     items: [
@@ -954,6 +961,11 @@ export default class StoryEngine {
       this.addRegion(rect.x, rect.y, rect.w, rect.h, () => {
         if (spot.id === 'half-open-door' && !this.doorOpenedAt) {
           this.doorOpenedAt = Date.now();
+        }
+        if (spot.advanceBeforeResult) {
+          this.goToNextScene();
+          this.queueMessages(spot.result || [], false);
+          return;
         }
         this.queueMessages(spot.result || [], Boolean(spot.next));
       });
