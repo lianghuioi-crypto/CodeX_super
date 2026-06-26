@@ -53,6 +53,15 @@ const STAGE_LABELS = {
   final: '决赛'
 }
 const KNOCKOUT_KEYS = STAGE_KEYS.slice(1)
+const STORAGE_KEYS = {
+  nightmare: 'worldCupStrikeNightmareUnlocked'
+}
+const DIFFICULTIES = [
+  { key: 'easy', name: '简单的对手', short: '简单', force: 0.86, accuracy: 0.44, defense: 0.08, power: 0.9, think: 0.85 },
+  { key: 'normal', name: '普通的对手', short: '普通', force: 1.0, accuracy: 0.67, defense: 0.28, power: 1.0, think: 0.68 },
+  { key: 'hard', name: '困难的对手', short: '困难', force: 1.12, accuracy: 0.83, defense: 0.55, power: 1.12, think: 0.52 },
+  { key: 'nightmare', name: '噩梦级对手', short: '噩梦', force: 1.28, accuracy: 0.96, defense: 0.78, power: 1.28, think: 0.38 }
+]
 
 function pickTextColor(color) {
   const hex = color.replace('#', '')
@@ -88,6 +97,9 @@ class WorldCupStrike {
     this.tournamentNotice = ''
     this.tournamentPopup = null
     this.groupViewIndex = 0
+    this.nightmareUnlocked = this.readStorageFlag(STORAGE_KEYS.nightmare)
+    this.difficultyKey = 'easy'
+    this.difficultyButtons = []
     this.startTeamSelect()
     if (typeof window !== 'undefined') window.__worldCupGame = this
     if (typeof globalThis !== 'undefined') globalThis.__worldCupGame = this
@@ -112,6 +124,7 @@ class WorldCupStrike {
     if (TEAM && TEAM.player && typeof TEAM.player.id === 'number') {
       this.teamIndex = TEAM.player.id
     }
+    if (this.difficultyKey === 'nightmare' && !this.nightmareUnlocked) this.difficultyKey = 'hard'
   }
 
   chooseTeam(team) {
@@ -132,6 +145,31 @@ class WorldCupStrike {
     this.effects = []
     this.screenShake = 0
     for (let i = 0; i < 38; i += 1) this.addConfetti(rand(0, WIDTH), rand(-HEIGHT, HEIGHT * 0.2))
+  }
+
+  readStorageFlag(key) {
+    try {
+      if (isWechatGame && wx.getStorageSync) return !!wx.getStorageSync(key)
+      if (typeof localStorage !== 'undefined') return localStorage.getItem(key) === '1'
+    } catch (error) {
+      return false
+    }
+    return false
+  }
+
+  writeStorageFlag(key, value) {
+    try {
+      if (isWechatGame && wx.setStorageSync) wx.setStorageSync(key, value ? '1' : '')
+      else if (typeof localStorage !== 'undefined') localStorage.setItem(key, value ? '1' : '0')
+    } catch (error) {}
+  }
+
+  getDifficulty() {
+    return DIFFICULTIES.find((item) => item.key === this.difficultyKey) || DIFFICULTIES[0]
+  }
+
+  getAvailableDifficulties() {
+    return DIFFICULTIES.filter((item) => item.key !== 'nightmare' || this.nightmareUnlocked)
   }
 
   moveTeamSelection(step) {
@@ -473,6 +511,15 @@ class WorldCupStrike {
       this.tournament.playerActive = false
       this.tournament.playerEliminated = true
     }
+    if (lastMatch && lastMatch.stage === 'final' && lastMatch.winner && lastMatch.winner.id === this.tournament.playerTeam.id && this.difficultyKey === 'hard') {
+      this.nightmareUnlocked = true
+      this.writeStorageFlag(STORAGE_KEYS.nightmare, true)
+      this.tournamentPopup = {
+        title: '噩梦级对手已解锁',
+        subtitle: '困难夺冠完成，下一次可挑战最高难度',
+        matches: peerResults
+      }
+    }
     this.currentTournamentMatch = null
     this.pendingTournamentMatch = this.advanceTournamentUntilPlayerMatch()
     this.mode = 'tournament'
@@ -510,6 +557,8 @@ class WorldCupStrike {
   }
 
   makePlayer(team, index, x, y, number, atk, hp) {
+    const difficulty = this.getDifficulty()
+    const aiPower = team === 'rival' ? difficulty.power : 1
     return {
       type: 'player',
       id: `${team}-${index}`,
@@ -522,9 +571,9 @@ class WorldCupStrike {
       vy: 0,
       r: 22 * this.scale,
       mass: 1.35,
-      atk,
-      maxHp: hp,
-      hp,
+      atk: Math.round(atk * aiPower),
+      maxHp: Math.round(hp * (team === 'rival' ? (0.94 + difficulty.power * 0.08) : 1)),
+      hp: Math.round(hp * (team === 'rival' ? (0.94 + difficulty.power * 0.08) : 1)),
       hitFlash: 0,
       movedThisShot: false
     }
@@ -698,7 +747,11 @@ class WorldCupStrike {
     const leftArrow = { x: WIDTH * 0.02, y: HEIGHT * 0.40, w: WIDTH * 0.08, h: HEIGHT * 0.12 }
     const rightArrow = { x: WIDTH * 0.90, y: HEIGHT * 0.40, w: WIDTH * 0.08, h: HEIGHT * 0.12 }
 
-    if (absX > 34 && absX > absY) {
+    const difficultyHit = this.difficultyButtons.find((button) => this.pointInRect(this.selectionDrag.startX, this.selectionDrag.startY, button))
+
+    if (difficultyHit && absX < 12 && absY < 12) {
+      this.difficultyKey = difficultyHit.key
+    } else if (absX > 34 && absX > absY) {
       this.moveTeamSelection(dx < 0 ? 1 : -1)
     } else if (this.pointInRect(this.selectionDrag.startX, this.selectionDrag.startY, confirmButton)) {
       this.chooseTeam(ALL_TEAMS[this.teamIndex])
@@ -967,7 +1020,7 @@ class WorldCupStrike {
     this.turn = this.turn === 'player' ? 'rival' : 'player'
     if (this.turn === 'player') this.turnCount += 1
     this.state = 'aim'
-    this.aiTimer = this.turn === 'rival' ? 0.7 : 0
+    this.aiTimer = this.turn === 'rival' ? this.getDifficulty().think : 0
     this.message = this.turn === 'player' ? '我方回合：拖拽一名球员' : '对手回合'
     this.messageTimer = 1.4
   }
@@ -975,31 +1028,53 @@ class WorldCupStrike {
   fireAiShot() {
     const candidates = this.players.filter((p) => p.team === 'rival' && p.hp > 0)
     if (!candidates.length) return
+    const difficulty = this.getDifficulty()
+    const f = this.field
+    const attackGoal = { x: f.x + f.w * 0.5, y: f.y + f.h + 62 * this.scale }
+    const ownGoal = { x: f.x + f.w * 0.5, y: f.y - 48 * this.scale }
+    const ballNearOwnGoal = this.ball.y < f.y + f.h * (0.32 + difficulty.defense * 0.18)
+    const shouldDefend = ballNearOwnGoal && Math.random() < difficulty.defense
+    const mode = shouldDefend ? '防守拦截' : '组织进攻'
+
+    const targetPoint = shouldDefend
+      ? {
+          x: this.ball.x + (ownGoal.x - this.ball.x) * (0.16 + difficulty.defense * 0.22),
+          y: this.ball.y + (ownGoal.y - this.ball.y) * (0.16 + difficulty.defense * 0.16)
+        }
+      : {
+          x: this.ball.x + (attackGoal.x - this.ball.x) * (0.18 + difficulty.accuracy * 0.12),
+          y: this.ball.y + (attackGoal.y - this.ball.y) * (0.18 + difficulty.accuracy * 0.12)
+        }
+
     let chosen = candidates[0]
     let best = Infinity
-    const goal = { x: this.field.x + this.field.w * 0.5, y: this.field.y + this.field.h + 60 * this.scale }
     for (const p of candidates) {
-      const score = dist(p, this.ball) + Math.abs(p.x - this.ball.x) * 0.4
+      const distanceScore = dist(p, this.ball)
+      const laneScore = Math.abs((this.ball.x - p.x) * 0.35 + (targetPoint.x - p.x) * 0.18)
+      const guardScore = shouldDefend ? Math.abs(p.y - ownGoal.y) * 0.28 : 0
+      const score = distanceScore + laneScore + guardScore - p.atk * difficulty.accuracy * 1.2
       if (score < best) {
         best = score
         chosen = p
       }
     }
 
-    const aimX = this.ball.x + (goal.x - this.ball.x) * 0.22
-    const aimY = this.ball.y + (goal.y - this.ball.y) * 0.22
+    const targetJitter = (1 - difficulty.accuracy) * 58 * this.scale
+    const aimX = targetPoint.x + rand(-targetJitter, targetJitter)
+    const aimY = targetPoint.y + rand(-targetJitter, targetJitter)
     let dx = aimX - chosen.x
     let dy = aimY - chosen.y
     const len = Math.hypot(dx, dy) || 1
     dx /= len
     dy /= len
-    const force = clamp(760 + rand(-90, 120), 620, 920)
+    const baseForce = shouldDefend ? 700 : 790
+    const force = clamp((baseForce + rand(-90, 135)) * difficulty.force, 570, 1180)
     chosen.vx = dx * force
     chosen.vy = dy * force
     chosen.movedThisShot = true
     this.shotOwner = chosen
     this.state = 'moving'
-    this.message = `对手 ${chosen.number} 弹射`
+    this.message = `${difficulty.short}AI ${mode}`
     this.messageTimer = 1
     this.addBurst(chosen.x, chosen.y, TEAM.rival.sub, 10)
   }
@@ -1133,6 +1208,7 @@ class WorldCupStrike {
 
     this.drawArrow(WIDTH * 0.06, centerY, -1)
     this.drawArrow(WIDTH * 0.94, centerY, 1)
+    this.drawDifficultySelect()
 
     const btnW = WIDTH * 0.34
     const btnH = HEIGHT * 0.095
@@ -1147,6 +1223,40 @@ class WorldCupStrike {
     ctx.fillStyle = '#16213a'
     ctx.font = `bold ${18 * this.scale}px Arial`
     ctx.fillText('Goal !', WIDTH * 0.5, btnY + btnH * 0.62)
+  }
+
+  drawDifficultySelect() {
+    const options = this.getAvailableDifficulties()
+    this.difficultyButtons = []
+    const x = WIDTH * 0.075
+    const y = HEIGHT * 0.705
+    const w = WIDTH * 0.85
+    const h = 36 * this.scale
+    const gap = 5 * this.scale
+    const itemW = (w - gap * (options.length - 1)) / options.length
+
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#102145'
+    ctx.font = `bold ${12 * this.scale}px Arial`
+    ctx.fillText('AI 难度', WIDTH * 0.5, y - 10 * this.scale)
+
+    options.forEach((option, index) => {
+      const bx = x + index * (itemW + gap)
+      const active = option.key === this.difficultyKey
+      const fill = active ? (option.key === 'nightmare' ? '#2b124f' : '#ffdf4d') : 'rgba(255,255,255,0.78)'
+      this.roundRect(bx, y, itemW, h, 10 * this.scale, fill)
+      this.strokeRoundRect(bx, y, itemW, h, 10 * this.scale, active ? '#102145' : 'rgba(16,33,69,0.32)', active ? 2 : 1)
+      ctx.fillStyle = active && option.key === 'nightmare' ? '#ffffff' : '#102145'
+      ctx.font = `bold ${11 * this.scale}px Arial`
+      ctx.fillText(option.short, bx + itemW * 0.5, y + h * 0.62)
+      this.difficultyButtons.push({ x: bx, y, w: itemW, h, key: option.key })
+    })
+
+    if (!this.nightmareUnlocked) {
+      ctx.fillStyle = 'rgba(16,33,69,0.76)'
+      ctx.font = `${10 * this.scale}px Arial`
+      ctx.fillText('困难夺冠后解锁噩梦级', WIDTH * 0.5, y + h + 14 * this.scale)
+    }
   }
 
   drawTournament() {
@@ -1176,10 +1286,11 @@ class WorldCupStrike {
     ctx.font = `${12 * this.scale}px Arial`
     ctx.fillStyle = '#38536d'
     const playerGroup = this.getPlayerGroup()
+    const difficulty = this.getDifficulty()
     const status = this.tournament.finished
       ? (this.tournament.champion && this.tournament.champion.id === this.tournament.playerTeam.id ? '冠军' : '大赛结束')
       : (this.pendingTournamentMatch ? '待战下一场' : 'AI 正在推进')
-    ctx.fillText(`${playerGroup ? `${playerGroup.name}组 ` : ''}${status}`, WIDTH * 0.245, HEIGHT * 0.156)
+    ctx.fillText(`${playerGroup ? `${playerGroup.name}组 ` : ''}${status} / ${difficulty.short}AI`, WIDTH * 0.245, HEIGHT * 0.156)
     ctx.fillText(this.tournamentNotice || '查看赛程并开始下一场', WIDTH * 0.245, HEIGHT * 0.184)
 
     const startX = WIDTH * 0.60
