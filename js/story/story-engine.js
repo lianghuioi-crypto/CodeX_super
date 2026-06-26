@@ -33,6 +33,10 @@ const CHARACTER_ASSETS = {
   },
 };
 
+const PLACEHOLDER_CHARACTER_COLORS = {
+  小乙: '#e3a36f',
+};
+
 const PROP_ASSETS = {
   mirrorGhost: 'images/props/tongjing-nvgui.png',
   qiyunStage: 'images/scenes/qiyun-stage.jpg',
@@ -42,6 +46,15 @@ const PROP_ASSETS = {
 };
 
 const CHANGELOG = [
+  {
+    version: '1.18',
+    date: '2026-06-26',
+    items: [
+      '新增第二章“后台戏房”剧情体验流程，覆盖妆台、鬼面、铜锣、小乙、谢无咎专座、血包、走位板、红泥戏鞋和妆阁门线索。',
+      '首页新增章节选择，可直接从第一章或第二章开始测试。',
+      '第二章角色和场景暂用色块与文字标注占位，后续可按资源逐步替换。',
+    ],
+  },
   {
     version: '1.17',
     date: '2026-06-19',
@@ -207,6 +220,17 @@ export default class StoryEngine {
     this.canvas = canvas;
     this.ctx = ctx;
     this.story = story;
+    this.chapters = story.chapters || [
+      {
+        id: story.caseId || 'chapter-1',
+        title: story.title || '第一章',
+        subtitle: story.subtitle || '',
+        scenes: story.scenes || [],
+      },
+    ];
+    this.chapterIndex = 0;
+    this.currentChapter = this.chapters[0];
+    this.story.scenes = this.currentChapter.scenes;
     this.getSize = options.getSize || (() => ({ width: canvas.width, height: canvas.height }));
     this.onComplete = options.onComplete || (() => {});
     this.regions = [];
@@ -236,7 +260,14 @@ export default class StoryEngine {
   }
 
   start() {
+    this.startChapter(this.chapterIndex);
+  }
+
+  startChapter(index = 0) {
     this.startRequested = true;
+    this.chapterIndex = Math.max(0, Math.min(this.chapters.length - 1, index));
+    this.currentChapter = this.chapters[this.chapterIndex] || this.chapters[0];
+    this.story.scenes = this.currentChapter.scenes || [];
     this.sceneIndex = 0;
     this.stepIndex = 0;
     this.messageQueue = [];
@@ -249,7 +280,7 @@ export default class StoryEngine {
     this.overlay = this.assetsReady ? 'changelog' : 'loading';
     this.changelogPage = 0;
     if (this.assetsReady) {
-      this.showToast('点击对话推进，点击发光区域调查');
+      this.showToast(this.currentChapter.title || '点击对话推进，点击发光区域调查');
     }
   }
 
@@ -410,7 +441,7 @@ export default class StoryEngine {
     if (speaker === '玩家' || speaker === '女主') {
       return '沈清和';
     }
-    return CHARACTER_ASSETS[speaker] ? speaker : '';
+    return CHARACTER_ASSETS[speaker] || PLACEHOLDER_CHARACTER_COLORS[speaker] ? speaker : '';
   }
 
   isKnownSpeaker(speaker) {
@@ -564,8 +595,11 @@ export default class StoryEngine {
     const maxCharacterScale = isPortrait ? 1.16 : 1;
     const isStageAfterDeath = this.isStageAfterDeathReveal();
     const usesStageArt = scene.id === 'stage-open' || scene.id === 'body-check';
+    const usesBackstageRoom = scene.visual === 'backstage-room';
 
-    if (usesStageArt) {
+    if (usesBackstageRoom) {
+      this.drawBackstageRoomBackground(w * 0.06, stageTop, w * 0.88, stageH, scene);
+    } else if (usesStageArt) {
       this.drawStageArtBackground(w * 0.06, stageTop, w * 0.88, stageH);
     } else {
       this.roundRect(w * 0.08, stageTop, w * 0.84, stageH, 8, '#25212a', '#735244');
@@ -573,7 +607,9 @@ export default class StoryEngine {
       ctx.fillRect(w * 0.12, stageTop + stageH * 0.72, w * 0.76, stageH * 0.16);
     }
 
-    if (scene.id === 'front-door') {
+    if (usesBackstageRoom) {
+      this.drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale);
+    } else if (scene.id === 'front-door') {
       const showZhaoxue = this.shouldShowZhaoxueAtDoor();
       const showZhanggui = this.shouldShowZhangguiAtDoor();
       this.drawDoorSceneBackground(w * 0.06, stageTop, w * 0.88, stageH);
@@ -653,6 +689,82 @@ export default class StoryEngine {
       ctx.font = '12px Arial';
       ctx.fillText(note, chipX + 8, chipY + 15);
     });
+  }
+
+  drawBackstageRoomBackground(x, y, w, h, scene) {
+    const ctx = this.ctx;
+    ctx.save();
+    const gradient = ctx.createLinearGradient(x, y, x, y + h);
+    gradient.addColorStop(0, '#3a2119');
+    gradient.addColorStop(0.56, '#231719');
+    gradient.addColorStop(1, '#151113');
+    this.roundRect(x, y, w, h, 8, gradient, 'rgba(226,196,140,0.42)');
+    this.clipRoundRect(x, y, w, h, 8);
+
+    ctx.fillStyle = 'rgba(100, 54, 38, 0.72)';
+    ctx.fillRect(x + w * 0.06, y + h * 0.16, w * 0.2, h * 0.45);
+    ctx.fillStyle = 'rgba(180, 74, 54, 0.5)';
+    ctx.fillRect(x + w * 0.3, y + h * 0.08, w * 0.2, h * 0.58);
+    ctx.fillStyle = 'rgba(210, 150, 78, 0.52)';
+    ctx.fillRect(x + w * 0.72, y + h * 0.12, w * 0.13, h * 0.48);
+
+    this.drawSceneProp('妆台', x + w * 0.12, y + h * 0.45, w * 0.2, h * 0.11, '#8d5b3d');
+    this.drawSceneProp('鬼面', x + w * 0.54, y + h * 0.2, w * 0.16, h * 0.1, '#e8dfd2');
+    this.drawSceneProp('铜锣', x + w * 0.12, y + h * 0.58, w * 0.16, h * 0.12, '#c58b42');
+    this.drawSceneProp('木箱', x + w * 0.6, y + h * 0.56, w * 0.22, h * 0.12, '#6f4b34');
+    this.drawSceneProp('长凳', x + w * 0.39, y + h * 0.63, w * 0.34, h * 0.08, '#7d5033');
+    this.drawSceneProp('道具架', x + w * 0.48, y + h * 0.31, w * 0.24, h * 0.2, '#533b30');
+    this.drawSceneProp('走位板', x + w * 0.23, y + h * 0.24, w * 0.24, h * 0.12, '#2b3834');
+    this.drawSceneProp('妆阁门', x + w * 0.52, y + h * 0.16, w * 0.18, h * 0.42, '#241618');
+
+    ctx.fillStyle = 'rgba(8, 8, 10, 0.22)';
+    ctx.fillRect(x, y + h * 0.73, w, h * 0.18);
+    ctx.restore();
+
+    this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
+  }
+
+  drawSceneProp(label, x, y, w, h, fill) {
+    this.roundRect(x, y, w, h, 5, fill, 'rgba(245,213,152,0.42)');
+    this.ctx.fillStyle = 'rgba(255,241,213,0.86)';
+    this.ctx.font = 'bold 12px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(label, x + w / 2, y + h / 2 + 4);
+    this.ctx.textAlign = 'left';
+  }
+
+  drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale) {
+    const w = this.width;
+    this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.5, '#31516b', {
+      width: Math.min(106 * maxCharacterScale, w * 0.098 * characterScale),
+      height: Math.min(140 * maxCharacterScale, stageH * 0.42 * characterScale),
+    });
+    this.drawCharacter('昭雪', w * 0.32, stageTop + stageH * 0.66, '#d8d1bf', {
+      width: Math.min(72 * maxCharacterScale, w * 0.066 * characterScale),
+      height: Math.min(88 * maxCharacterScale, stageH * 0.26 * characterScale),
+    });
+    this.drawCharacter('掌柜', w * 0.76, stageTop + stageH * 0.52, '#476a70', {
+      width: Math.min(96 * maxCharacterScale, w * 0.086 * characterScale),
+      height: Math.min(130 * maxCharacterScale, stageH * 0.39 * characterScale),
+    });
+    if (this.shouldShowXiaoyi()) {
+      this.drawCharacter('小乙', w * 0.62, stageTop + stageH * 0.58, '#d99167', {
+        width: Math.min(76 * maxCharacterScale, w * 0.07 * characterScale),
+        height: Math.min(108 * maxCharacterScale, stageH * 0.32 * characterScale),
+        nameOffsetX: this.isPortraitLayout() ? 2 : 0,
+      });
+    }
+  }
+
+  shouldShowXiaoyi() {
+    const scene = this.getScene();
+    if (!scene || scene.visual !== 'backstage-room') {
+      return false;
+    }
+    if (scene.id === 'backstage-room-entry') {
+      return this.stepIndex >= 4;
+    }
+    return scene.id !== 'backstage-dressing-door';
   }
 
   drawStageArtBackground(x, y, w, h) {
@@ -834,7 +946,13 @@ export default class StoryEngine {
     ctx.fillText(this.story.title, padding, 32);
     ctx.font = '13px Arial';
     ctx.fillStyle = '#cfc4b8';
-    ctx.fillText(scene.title, padding, 54);
+    const chapterTitle = this.currentChapter && this.currentChapter.title ? this.currentChapter.title : '';
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padding, 38, this.width - 150, 22);
+    ctx.clip();
+    ctx.fillText((chapterTitle ? chapterTitle + ' · ' : '') + scene.title, padding, 54);
+    ctx.restore();
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e0b36a';
     ctx.fillText((this.sceneIndex + 1) + '/' + this.story.scenes.length, this.width - padding, 32);
@@ -860,6 +978,14 @@ export default class StoryEngine {
       fontSize: isPortrait ? 12 : 14,
       fill: 'rgba(43,58,61,0.88)',
       stroke: 'rgba(159,209,200,0.72)',
+    });
+    const chapterW = Math.min(isPortrait ? 74 : 96, this.width * (isPortrait ? 0.24 : 0.22));
+    this.drawButton(x - chapterW - 8, y, chapterW, h, '章节', () => {
+      this.overlay = 'chapter-select';
+    }, {
+      fontSize: isPortrait ? 12 : 14,
+      fill: 'rgba(69,48,54,0.88)',
+      stroke: 'rgba(226,196,140,0.72)',
     });
   }
 
@@ -966,6 +1092,9 @@ export default class StoryEngine {
           this.goToNextScene();
           this.queueMessages(spot.result || [], false);
           return;
+        }
+        if (spot.item && !this.inventory.includes(spot.item)) {
+          this.inventory.push(spot.item);
         }
         this.queueMessages(spot.result || [], Boolean(spot.next));
       });
@@ -1076,11 +1205,13 @@ export default class StoryEngine {
     this.roundRect(x, y, w, h, 8, 'rgba(15,18,24,0.94)', '#d5a764');
     this.ctx.fillStyle = '#fff1d5';
     this.ctx.font = 'bold 24px Arial';
-    this.ctx.fillText('第一关结束', x + 24, y + 46);
+    this.ctx.fillText(step.title || '章节结束', x + 24, y + 46);
     this.ctx.fillStyle = '#f8efe4';
     this.ctx.font = '17px Arial';
     this.wrapText(step.text, x + 24, y + 88, w - 48, 28, 4);
-    this.drawButton(x + 24, y + h - 60, w - 48, 40, '重新体验', () => this.start());
+    this.drawButton(x + 24, y + h - 60, w - 48, 40, '回到章节选择', () => {
+      this.overlay = 'chapter-select';
+    });
   }
 
   drawItemTile(x, y, w, h, label) {
@@ -1234,8 +1365,13 @@ export default class StoryEngine {
     if (image && image.loaded) {
       this.ctx.drawImage(image, visualRect.x, visualRect.y, visualRect.w, visualRect.h);
     } else {
-      this.roundRect(drawX, drawY, width, height, 8, color, '#e2c48c');
+      this.roundRect(drawX, drawY, width, height, 8, PLACEHOLDER_CHARACTER_COLORS[label] || color, '#e2c48c');
       this.roundRect(drawX + width * 0.28, drawY - height * 0.18, width * 0.44, width * 0.44, width * 0.22, '#e8d1b0', '#6d4e39');
+      this.ctx.fillStyle = '#fff1d5';
+      this.ctx.font = 'bold 12px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(label, drawX + width / 2, drawY + height * 0.55);
+      this.ctx.textAlign = 'left';
     }
     this.ctx.restore();
     const bubbleCenterX = visualRect.x + visualRect.w / 2 + (options.nameOffsetX || 0);
@@ -1310,8 +1446,13 @@ export default class StoryEngine {
       this.ctx.drawImage(image, x, y, size, size);
     } else {
       this.clipCircle(x, y, size / 2);
-      this.ctx.fillStyle = '#7d2633';
+      this.ctx.fillStyle = PLACEHOLDER_CHARACTER_COLORS[label] || '#7d2633';
       this.ctx.fillRect(x, y, size, size);
+      this.ctx.fillStyle = '#fff1d5';
+      this.ctx.font = 'bold 13px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(label.slice(0, 2), x + size / 2, y + size / 2 + 5);
+      this.ctx.textAlign = 'left';
     }
     this.ctx.restore();
   }
@@ -1544,6 +1685,10 @@ export default class StoryEngine {
   }
 
   drawOverlay() {
+    if (this.overlay === 'chapter-select') {
+      this.drawChapterSelectOverlay();
+      return;
+    }
     if (this.overlay !== 'changelog') {
       return;
     }
@@ -1606,9 +1751,71 @@ export default class StoryEngine {
         }, { fontSize: isPortrait ? 12 : 14, fill: '#35464a', stroke: '#9fd1c8' });
       }
     }
-    this.drawButton(btnX, btnY, btnW, isPortrait ? 34 : 38, '开始体验', () => {
-      this.overlay = '';
+    this.drawButton(btnX, btnY, btnW, isPortrait ? 34 : 38, '选择章节', () => {
+      this.overlay = 'chapter-select';
     }, { fontSize: isPortrait ? 15 : 16 });
+    ctx.restore();
+  }
+
+  drawChapterSelectOverlay() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(2,4,8,0.66)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const isPortrait = this.isPortraitLayout();
+    const w = Math.min(this.width - 34, 620);
+    const h = Math.min(this.height - 84, isPortrait ? 520 : 500);
+    const x = (this.width - w) / 2;
+    const y = (this.height - h) / 2;
+    this.addRegion(0, 0, this.width, this.height, () => {});
+    this.roundRect(x, y, w, h, 10, 'rgba(18,20,24,0.96)', 'rgba(226,196,140,0.72)');
+
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText('选择章节', x + 24, y + 42);
+    ctx.fillStyle = '#b7d7ce';
+    ctx.font = '13px Arial';
+    ctx.fillText('请选择要测试的剧情章节', x + 24, y + 66);
+
+    const cardX = x + 22;
+    const cardW = w - 44;
+    const cardH = isPortrait ? 86 : 78;
+    const gap = 14;
+    const startY = y + 92;
+    this.chapters.forEach((chapter, index) => {
+      const cy = startY + index * (cardH + gap);
+      const selected = index === this.chapterIndex;
+      this.roundRect(
+        cardX,
+        cy,
+        cardW,
+        cardH,
+        8,
+        selected ? 'rgba(83,46,48,0.96)' : 'rgba(42,43,48,0.92)',
+        selected ? 'rgba(226,196,140,0.9)' : 'rgba(126,111,92,0.62)'
+      );
+      ctx.fillStyle = selected ? '#ffe6b2' : '#fff1d5';
+      ctx.font = 'bold 17px Arial';
+      ctx.fillText(chapter.title || ('章节 ' + (index + 1)), cardX + 18, cy + 30);
+      ctx.fillStyle = '#cfc4b8';
+      ctx.font = '13px Arial';
+      this.wrapText(chapter.subtitle || '', cardX + 18, cy + 53, cardW - 36, 18, 2);
+      ctx.fillStyle = selected ? '#9fd1c8' : '#d5a764';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(selected ? '当前章节' : '点击开始', cardX + cardW - 16, cy + cardH - 16);
+      ctx.textAlign = 'left';
+      this.addRegion(cardX, cy, cardW, cardH, () => {
+        this.startChapter(index);
+        this.overlay = '';
+      });
+    });
+
+    const btnW = Math.min(isPortrait ? 104 : 150, w - 48);
+    this.drawButton(x + w - btnW - 22, y + h - 54, btnW, isPortrait ? 34 : 38, '继续当前', () => {
+      this.overlay = '';
+    }, { fontSize: isPortrait ? 14 : 15, fill: '#35464a', stroke: '#9fd1c8' });
     ctx.restore();
   }
 
@@ -1756,6 +1963,18 @@ export default class StoryEngine {
       '大门',
       '戏台',
       '后台',
+      '小乙',
+      '绯萤',
+      '沈绯衣',
+      '戏房',
+      '妆阁',
+      '血包',
+      '润嗓梅',
+      '红泥',
+      '走位',
+      '戏鞋',
+      '后巷',
+      '糯米纸',
     ].sort((a, b) => b.length - a.length);
   }
 
