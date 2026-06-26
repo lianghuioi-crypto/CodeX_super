@@ -47,6 +47,15 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.20',
+    date: '2026-06-26',
+    items: [
+      '交互点编辑器面板移动到下方对话框区域，避免遮挡舞台热区调整。',
+      '进入编辑模式后隐藏所有角色、头像气泡和尸体形象，只保留场景与交互点框。',
+      '底部编辑面板改为紧凑多列交互点列表，并保留场景切换、尺寸调整、重置和保存。',
+    ],
+  },
+  {
     version: '1.19',
     date: '2026-06-26',
     items: [
@@ -651,18 +660,23 @@ export default class StoryEngine {
       this.drawBackstageRoomBackground(w * 0.06, stageTop, w * 0.88, stageH, scene);
     } else if (usesStageArt) {
       this.drawStageArtBackground(w * 0.06, stageTop, w * 0.88, stageH);
+    } else if (scene.id === 'front-door') {
+      this.drawDoorSceneBackground(w * 0.06, stageTop, w * 0.88, stageH);
+    } else if (scene.id === 'backstage-door') {
+      this.drawBackstageDoorBackground(w * 0.06, stageTop, w * 0.88, stageH);
     } else {
       this.roundRect(w * 0.08, stageTop, w * 0.84, stageH, 8, '#25212a', '#735244');
       ctx.fillStyle = '#15171c';
       ctx.fillRect(w * 0.12, stageTop + stageH * 0.72, w * 0.76, stageH * 0.16);
     }
 
-    if (usesBackstageRoom) {
+    if (this.editor.active) {
+      // Editing needs a clear scene canvas; only backgrounds, notes, and hotspot boxes remain visible.
+    } else if (usesBackstageRoom) {
       this.drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale);
     } else if (scene.id === 'front-door') {
       const showZhaoxue = this.shouldShowZhaoxueAtDoor();
       const showZhanggui = this.shouldShowZhangguiAtDoor();
-      this.drawDoorSceneBackground(w * 0.06, stageTop, w * 0.88, stageH);
       this.drawCharacter('沈清和', w * 0.17, stageTop + stageH * 0.53, '#31516b', {
         width: Math.min(106 * maxCharacterScale, w * 0.098 * characterScale),
         height: Math.min(138 * maxCharacterScale, stageH * 0.41 * characterScale),
@@ -695,7 +709,6 @@ export default class StoryEngine {
         height: Math.min(136 * maxCharacterScale, stageH * 0.4 * characterScale),
       });
     } else if (scene.id === 'backstage-door') {
-      this.drawBackstageDoorBackground(w * 0.06, stageTop, w * 0.88, stageH);
       this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.34, '#31516b', {
         width: Math.min(130 * maxCharacterScale, w * 0.12 * characterScale),
         height: Math.min(170 * maxCharacterScale, stageH * 0.51 * characterScale),
@@ -2132,8 +2145,8 @@ export default class StoryEngine {
     this.drawEditorHotspots(items);
 
     ctx.save();
-    ctx.fillStyle = 'rgba(4,8,10,0.46)';
-    ctx.fillRect(0, 0, this.width, 88);
+    ctx.fillStyle = 'rgba(4,8,10,0.4)';
+    ctx.fillRect(0, 0, this.width, 82);
     ctx.fillStyle = '#fff1d5';
     ctx.font = 'bold 18px Arial';
     ctx.fillText('交互点编辑器', 16, 34);
@@ -2182,18 +2195,26 @@ export default class StoryEngine {
     const panel = this.getEditorPanelRect();
     this.roundRect(panel.x, panel.y, panel.w, panel.h, 10, 'rgba(17,22,25,0.96)', 'rgba(159,209,200,0.62)');
 
+    const pad = 12;
+    const leftX = panel.x + pad;
+    const contentW = panel.w - pad * 2;
+    const footerY = panel.y + panel.h - 42;
+    const sceneW = Math.min(106, contentW * 0.32);
+    const selectedX = leftX + sceneW + 10;
+    const selectedW = panel.x + panel.w - selectedX - pad;
+
     ctx.fillStyle = '#fff1d5';
-    ctx.font = 'bold 15px Arial';
-    ctx.fillText('场景', panel.x + 12, panel.y + 26);
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText('场景', leftX, panel.y + 28);
     ctx.fillStyle = '#b7d7ce';
     ctx.font = '11px Arial';
-    ctx.fillText((this.editor.sceneIndex + 1) + '/' + this.story.scenes.length, panel.x + panel.w - 38, panel.y + 26);
-    this.drawButton(panel.x + 10, panel.y + 40, 44, 28, '上', () => this.changeEditorScene(-1), {
+    ctx.fillText((this.editor.sceneIndex + 1) + '/' + this.story.scenes.length, leftX + 38, panel.y + 28);
+    this.drawButton(leftX, panel.y + 38, 44, 28, '上', () => this.changeEditorScene(-1), {
       fontSize: 12,
       fill: '#35464a',
       stroke: '#9fd1c8',
     });
-    this.drawButton(panel.x + panel.w - 54, panel.y + 40, 44, 28, '下', () => this.changeEditorScene(1), {
+    this.drawButton(leftX + 52, panel.y + 38, 44, 28, '下', () => this.changeEditorScene(1), {
       fontSize: 12,
       fill: '#35464a',
       stroke: '#9fd1c8',
@@ -2201,80 +2222,94 @@ export default class StoryEngine {
 
     ctx.fillStyle = '#d5a764';
     ctx.font = 'bold 12px Arial';
-    this.wrapText(scene ? scene.title : '', panel.x + 12, panel.y + 88, panel.w - 24, 16, 2);
+    this.wrapText(scene ? scene.title : '', selectedX, panel.y + 26, selectedW - 58, 16, 2);
+
+    const selected = this.getSelectedEditorHotspot();
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText(selected ? selected.spot.label || selected.spot.id : '未选择', selectedX, panel.y + 58);
+    if (selected) {
+      ctx.fillStyle = '#cfc4b8';
+      ctx.font = '10px Arial';
+      ctx.fillText(
+        'x ' + selected.spot.x.toFixed(2) + '  y ' + selected.spot.y.toFixed(2),
+        selectedX + 74,
+        panel.y + 58
+      );
+      this.drawButton(panel.x + panel.w - pad - 52, panel.y + 38, 52, 26, '重置', () => this.resetSelectedEditorHotspot(), {
+        fontSize: 11,
+        fill: '#4d3436',
+        stroke: '#d5a764',
+      });
+    }
 
     ctx.fillStyle = '#fff1d5';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('交互点', panel.x + 12, panel.y + 128);
+    ctx.font = 'bold 15px Arial';
+    ctx.fillText('交互点', leftX, panel.y + 82);
     if (!items.length) {
       ctx.fillStyle = '#cfc4b8';
       ctx.font = '12px Arial';
-      this.wrapText('当前场景没有交互点', panel.x + 12, panel.y + 154, panel.w - 24, 18, 2);
+      this.wrapText('当前场景没有交互点', leftX, panel.y + 108, contentW, 18, 2);
     }
 
-    const rowH = 38;
-    const listY = panel.y + 142;
-    const listBottom = panel.y + panel.h - 150;
+    const rowH = 31;
+    const rowGap = 6;
+    const colGap = 8;
+    const listY = panel.y + 92;
+    const listBottom = footerY - 8;
+    const maxRows = Math.max(1, Math.floor((listBottom - listY) / (rowH + rowGap)));
+    const colCount = Math.max(1, Math.min(3, Math.ceil(items.length / maxRows)));
+    const colW = (contentW - colGap * (colCount - 1)) / colCount;
     items.forEach((item, index) => {
-      const rowY = listY + index * (rowH + 6);
-      if (rowY + rowH > listBottom) {
+      const col = Math.floor(index / maxRows);
+      const row = index % maxRows;
+      if (col >= colCount) {
         return;
       }
+      const rowX = leftX + col * (colW + colGap);
+      const rowY = listY + row * (rowH + rowGap);
       const selected = item.key === this.editor.selectedKey;
       this.roundRect(
-        panel.x + 10,
+        rowX,
         rowY,
-        panel.w - 20,
+        colW,
         rowH,
         7,
         selected ? 'rgba(117,55,55,0.95)' : 'rgba(48,54,58,0.92)',
         selected ? 'rgba(255,160,124,0.86)' : 'rgba(126,111,92,0.55)'
       );
       ctx.fillStyle = selected ? '#ffe6d0' : '#f8efe4';
-      ctx.font = 'bold 12px Arial';
-      ctx.fillText((index + 1) + '. ' + (item.spot.label || item.spot.id), panel.x + 18, rowY + 16);
+      ctx.font = 'bold 10px Arial';
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rowX + 8, rowY, colW - 16, rowH);
+      ctx.clip();
+      ctx.fillText((index + 1) + '. ' + (item.spot.label || item.spot.id), rowX + 8, rowY + 14);
       ctx.fillStyle = '#b7d7ce';
       ctx.font = '10px Arial';
-      ctx.fillText((item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1), panel.x + 18, rowY + 31);
-      this.addRegion(panel.x + 10, rowY, panel.w - 20, rowH, (tapX, tapY) => this.selectEditorHotspot(item, true, tapX, tapY));
+      ctx.fillText((item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1), rowX + 8, rowY + 28);
+      ctx.restore();
+      this.addRegion(rowX, rowY, colW, rowH, (tapX, tapY) => this.selectEditorHotspot(item, true, tapX, tapY));
     });
 
-    const selected = this.getSelectedEditorHotspot();
-    const toolY = panel.y + panel.h - 138;
-    ctx.fillStyle = '#fff1d5';
-    ctx.font = 'bold 13px Arial';
-    ctx.fillText(selected ? selected.spot.label || selected.spot.id : '未选择', panel.x + 12, toolY);
     if (selected) {
-      this.drawButton(panel.x + panel.w - 60, toolY - 18, 50, 24, '重置', () => this.resetSelectedEditorHotspot(), {
-        fontSize: 11,
-        fill: '#4d3436',
-        stroke: '#d5a764',
-      });
-      ctx.fillStyle = '#cfc4b8';
-      ctx.font = '10px Arial';
-      ctx.fillText(
-        'x ' + selected.spot.x.toFixed(2) + '  y ' + selected.spot.y.toFixed(2),
-        panel.x + 12,
-        toolY + 18
-      );
-      const btnY = toolY + 30;
-      const btnW = (panel.w - 32) / 2;
-      this.drawButton(panel.x + 10, btnY, btnW, 28, '宽 -', () => this.resizeEditorHotspot(-0.02, 0), {
+      const btnW = Math.max(40, (selectedW - 12) / 4);
+      this.drawButton(selectedX, footerY, btnW, 30, '宽 -', () => this.resizeEditorHotspot(-0.02, 0), {
         fontSize: 12,
         fill: '#4f4642',
         stroke: '#d5a764',
       });
-      this.drawButton(panel.x + 22 + btnW, btnY, btnW, 28, '宽 +', () => this.resizeEditorHotspot(0.02, 0), {
+      this.drawButton(selectedX + btnW + 4, footerY, btnW, 30, '宽 +', () => this.resizeEditorHotspot(0.02, 0), {
         fontSize: 12,
         fill: '#4f4642',
         stroke: '#d5a764',
       });
-      this.drawButton(panel.x + 10, btnY + 36, btnW, 28, '高 -', () => this.resizeEditorHotspot(0, -0.02), {
+      this.drawButton(selectedX + (btnW + 4) * 2, footerY, btnW, 30, '高 -', () => this.resizeEditorHotspot(0, -0.02), {
         fontSize: 12,
         fill: '#4f4642',
         stroke: '#d5a764',
       });
-      this.drawButton(panel.x + 22 + btnW, btnY + 36, btnW, 28, '高 +', () => this.resizeEditorHotspot(0, 0.02), {
+      this.drawButton(selectedX + (btnW + 4) * 3, footerY, btnW, 30, '高 +', () => this.resizeEditorHotspot(0, 0.02), {
         fontSize: 12,
         fill: '#4f4642',
         stroke: '#d5a764',
@@ -2282,7 +2317,7 @@ export default class StoryEngine {
     }
 
     const saveLabel = this.editor.dirty ? '保存*' : '保存';
-    this.drawButton(panel.x + 10, panel.y + panel.h - 42, panel.w - 20, 32, saveLabel, () => this.saveHotspotOverrides(), {
+    this.drawButton(leftX, footerY, sceneW - 6, 30, saveLabel, () => this.saveHotspotOverrides(), {
       fontSize: 14,
       fill: '#28645f',
       stroke: '#9fd1c8',
@@ -2291,10 +2326,10 @@ export default class StoryEngine {
 
   getEditorPanelRect() {
     const isPortrait = this.isPortraitLayout();
-    const w = Math.min(isPortrait ? 142 : 190, this.width * (isPortrait ? 0.38 : 0.3));
-    const x = this.width - w - 8;
-    const y = 96;
-    const h = this.height - 110;
+    const x = 16;
+    const w = this.width - 32;
+    const h = Math.min(this.height * (isPortrait ? 0.34 : 0.34), isPortrait ? 252 : 246);
+    const y = this.height - h - 16;
     return { x, y, w, h };
   }
 
