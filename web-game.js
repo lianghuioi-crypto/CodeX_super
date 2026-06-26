@@ -38,7 +38,21 @@ function toCanvasPoint(event) {
 function bindInput() {
   canvas.addEventListener('pointerdown', (event) => {
     const point = toCanvasPoint(event);
-    engine.handleTap(point.x, point.y);
+    canvas.setPointerCapture(event.pointerId);
+    engine.handlePointerDown(point.x, point.y);
+  });
+
+  canvas.addEventListener('pointermove', (event) => {
+    const point = toCanvasPoint(event);
+    engine.handlePointerMove(point.x, point.y);
+  });
+
+  canvas.addEventListener('pointerup', () => {
+    engine.handlePointerUp();
+  });
+
+  canvas.addEventListener('pointercancel', () => {
+    engine.handlePointerUp();
   });
 
   window.addEventListener('keydown', (event) => {

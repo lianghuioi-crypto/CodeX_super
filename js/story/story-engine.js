@@ -47,6 +47,16 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.19',
+    date: '2026-06-26',
+    items: [
+      '新增交互点编辑模式，可从游戏界面角落进入并按场景切换编辑。',
+      '编辑器右侧罗列当前场景全部交互点，支持拖拽调整位置和按钮微调色块大小。',
+      '交互点调整可保存到本地并立即用于游戏预览，刷新页面后继续生效。',
+      '新增当前交互点重置按钮，方便恢复剧情数据默认位置。',
+    ],
+  },
+  {
     version: '1.18',
     date: '2026-06-26',
     items: [
@@ -250,12 +260,22 @@ export default class StoryEngine {
     this.changelogPage = 0;
     this.transition = null;
     this.doorOpenedAt = 0;
+    this.hotspotOverrides = this.loadHotspotOverrides();
+    this.defaultHotspotRects = this.captureDefaultHotspotRects();
+    this.editor = {
+      active: false,
+      sceneIndex: 0,
+      selectedKey: '',
+      drag: null,
+      dirty: false,
+    };
     this.assetTotal = 0;
     this.assetLoaded = 0;
     this.assetFailed = 0;
     this.assetErrors = [];
     this.assetsReady = false;
     this.startRequested = false;
+    this.applyHotspotOverrides();
     this.preloadAssets();
   }
 
@@ -285,6 +305,10 @@ export default class StoryEngine {
   }
 
   handleTap(x, y) {
+    if (this.editor.active) {
+      this.handleEditorPointerDown(x, y);
+      return;
+    }
     if (!this.assetsReady) {
       return;
     }
@@ -295,7 +319,7 @@ export default class StoryEngine {
     for (let i = this.regions.length - 1; i >= 0; i--) {
       const region = this.regions[i];
       if (x >= region.x && x <= region.x + region.w && y >= region.y && y <= region.y + region.h) {
-        region.onTap();
+        region.onTap(x, y);
         return;
       }
     }
@@ -305,6 +329,24 @@ export default class StoryEngine {
       return;
     }
     this.advance();
+  }
+
+  handlePointerDown(x, y) {
+    this.handleTap(x, y);
+  }
+
+  handlePointerMove(x, y) {
+    if (!this.editor.active || !this.editor.drag) {
+      return;
+    }
+    this.moveEditorSpotTo(x, y);
+  }
+
+  handlePointerUp() {
+    if (!this.editor.active) {
+      return;
+    }
+    this.editor.drag = null;
   }
 
   update() {
@@ -321,6 +363,14 @@ export default class StoryEngine {
     this.regions = [];
     if (!this.assetsReady) {
       this.drawLoadingScreen();
+      return;
+    }
+    if (this.editor.active) {
+      this.activeSpeaker = '';
+      this.drawBackground();
+      this.drawScene();
+      this.drawEditorOverlay();
+      this.drawToast();
       return;
     }
     this.activeSpeaker = this.getActiveSpeaker();
@@ -986,6 +1036,15 @@ export default class StoryEngine {
       fontSize: isPortrait ? 12 : 14,
       fill: 'rgba(69,48,54,0.88)',
       stroke: 'rgba(226,196,140,0.72)',
+    });
+    const editorW = Math.min(isPortrait ? 58 : 72, this.width * 0.18);
+    const editorY = Math.max(86, y + h + 18);
+    this.drawButton(14, editorY, editorW, h, '编辑', () => {
+      this.openHotspotEditor();
+    }, {
+      fontSize: isPortrait ? 12 : 14,
+      fill: 'rgba(36,64,66,0.88)',
+      stroke: 'rgba(159,209,200,0.72)',
     });
   }
 
@@ -1819,6 +1878,426 @@ export default class StoryEngine {
     ctx.restore();
   }
 
+  openHotspotEditor() {
+    this.overlay = '';
+    this.messageQueue = [];
+    this.editor.active = true;
+    this.editor.sceneIndex = this.sceneIndex;
+    this.editor.selectedKey = '';
+    this.editor.drag = null;
+    this.editor.dirty = false;
+    const items = this.getEditorHotspots();
+    if (items[0]) {
+      this.editor.selectedKey = items[0].key;
+    }
+    this.showToast('交互点编辑模式');
+  }
+
+  closeHotspotEditor() {
+    this.editor.active = false;
+    this.editor.drag = null;
+    this.sceneIndex = Math.max(0, Math.min(this.story.scenes.length - 1, this.editor.sceneIndex));
+    this.stepIndex = 0;
+    this.showToast('已返回游戏预览');
+  }
+
+  handleEditorPointerDown(x, y) {
+    for (let i = this.regions.length - 1; i >= 0; i--) {
+      const region = this.regions[i];
+      if (x >= region.x && x <= region.x + region.w && y >= region.y && y <= region.y + region.h) {
+        region.onTap(x, y);
+        return;
+      }
+    }
+
+    const panel = this.getEditorPanelRect();
+    if (x >= panel.x && y >= panel.y && x <= panel.x + panel.w && y <= panel.y + panel.h) {
+      return;
+    }
+
+    const items = this.getEditorHotspots();
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      const rect = this.scaledRect(item.spot);
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+        this.editor.selectedKey = item.key;
+        this.editor.drag = {
+          key: item.key,
+          offsetX: x - rect.x,
+          offsetY: y - rect.y,
+        };
+        return;
+      }
+    }
+  }
+
+  moveEditorSpotTo(x, y) {
+    const item = this.getEditorHotspots().find((entry) => entry.key === this.editor.drag.key);
+    if (!item) {
+      return;
+    }
+    const maxX = Math.max(0, 1 - item.spot.w);
+    const maxY = Math.max(0, 1 - item.spot.h);
+    item.spot.x = this.clamp((x - this.editor.drag.offsetX) / this.width, 0, maxX);
+    item.spot.y = this.clamp((y - this.editor.drag.offsetY) / this.height, 0, maxY);
+    this.markHotspotOverride(item);
+  }
+
+  changeEditorScene(delta) {
+    const total = this.story.scenes.length;
+    if (!total) {
+      return;
+    }
+    this.editor.sceneIndex = (this.editor.sceneIndex + delta + total) % total;
+    this.sceneIndex = this.editor.sceneIndex;
+    this.stepIndex = 0;
+    const items = this.getEditorHotspots();
+    this.editor.selectedKey = items[0] ? items[0].key : '';
+    this.editor.drag = null;
+  }
+
+  selectEditorHotspot(item, startDrag = false, x = 0, y = 0) {
+    this.editor.selectedKey = item.key;
+    if (startDrag) {
+      const rect = this.scaledRect(item.spot);
+      this.editor.drag = {
+        key: item.key,
+        offsetX: rect.w / 2,
+        offsetY: rect.h / 2,
+      };
+      this.moveEditorSpotTo(x, y);
+    }
+  }
+
+  resizeEditorHotspot(dw, dh) {
+    const item = this.getSelectedEditorHotspot();
+    if (!item) {
+      return;
+    }
+    const centerX = item.spot.x + item.spot.w / 2;
+    const centerY = item.spot.y + item.spot.h / 2;
+    item.spot.w = this.clamp(item.spot.w + dw, 0.05, 0.82);
+    item.spot.h = this.clamp(item.spot.h + dh, 0.04, 0.72);
+    item.spot.x = this.clamp(centerX - item.spot.w / 2, 0, 1 - item.spot.w);
+    item.spot.y = this.clamp(centerY - item.spot.h / 2, 0, 1 - item.spot.h);
+    this.markHotspotOverride(item);
+  }
+
+  resetSelectedEditorHotspot() {
+    const item = this.getSelectedEditorHotspot();
+    if (!item) {
+      return;
+    }
+    const defaults = this.defaultHotspotRects[item.key];
+    if (!defaults) {
+      return;
+    }
+    item.spot.x = defaults.x;
+    item.spot.y = defaults.y;
+    item.spot.w = defaults.w;
+    item.spot.h = defaults.h;
+    delete this.hotspotOverrides[item.key];
+    this.editor.dirty = true;
+    this.showToast('已恢复默认位置，记得保存');
+  }
+
+  saveHotspotOverrides() {
+    try {
+      const storage = this.getLocalStorage();
+      if (!storage) {
+        this.showToast('当前环境不支持本地保存');
+        return;
+      }
+      storage.setItem('feiyi-hotspot-overrides-v1', JSON.stringify(this.hotspotOverrides));
+      this.editor.dirty = false;
+      this.showToast('交互点已保存，可直接预览');
+    } catch (error) {
+      this.showToast('保存失败，请检查浏览器权限');
+    }
+  }
+
+  loadHotspotOverrides() {
+    try {
+      const storage = this.getLocalStorage();
+      if (!storage) {
+        return {};
+      }
+      return JSON.parse(storage.getItem('feiyi-hotspot-overrides-v1') || '{}') || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  applyHotspotOverrides() {
+    this.chapters.forEach((chapter) => {
+      (chapter.scenes || []).forEach((scene) => {
+        (scene.steps || []).forEach((step, stepIndex) => {
+          if (!step.hotspots) {
+            return;
+          }
+          step.hotspots.forEach((spot) => {
+            const override = this.hotspotOverrides[this.getHotspotKey(chapter, scene, stepIndex, spot)];
+            if (!override) {
+              return;
+            }
+            ['x', 'y', 'w', 'h'].forEach((field) => {
+              if (Number.isFinite(override[field])) {
+                spot[field] = override[field];
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  captureDefaultHotspotRects() {
+    const defaults = {};
+    this.chapters.forEach((chapter) => {
+      (chapter.scenes || []).forEach((scene) => {
+        (scene.steps || []).forEach((step, stepIndex) => {
+          if (!step.hotspots) {
+            return;
+          }
+          step.hotspots.forEach((spot) => {
+            defaults[this.getHotspotKey(chapter, scene, stepIndex, spot)] = {
+              x: spot.x,
+              y: spot.y,
+              w: spot.w,
+              h: spot.h,
+            };
+          });
+        });
+      });
+    });
+    return defaults;
+  }
+
+  markHotspotOverride(item) {
+    this.hotspotOverrides[item.key] = {
+      x: this.roundCoord(item.spot.x),
+      y: this.roundCoord(item.spot.y),
+      w: this.roundCoord(item.spot.w),
+      h: this.roundCoord(item.spot.h),
+    };
+    this.editor.dirty = true;
+  }
+
+  getHotspotKey(chapter, scene, stepIndex, spot) {
+    return [chapter.id || 'chapter', scene.id || 'scene', stepIndex, spot.id || spot.label].join(':');
+  }
+
+  getEditorHotspots() {
+    const chapter = this.currentChapter || this.chapters[this.chapterIndex] || this.chapters[0];
+    const scene = chapter && chapter.scenes ? chapter.scenes[this.editor.sceneIndex] : null;
+    if (!chapter || !scene) {
+      return [];
+    }
+    const items = [];
+    (scene.steps || []).forEach((step, stepIndex) => {
+      if (!step.hotspots) {
+        return;
+      }
+      step.hotspots.forEach((spot, spotIndex) => {
+        items.push({
+          chapter,
+          scene,
+          step,
+          stepIndex,
+          spot,
+          spotIndex,
+          key: this.getHotspotKey(chapter, scene, stepIndex, spot),
+        });
+      });
+    });
+    return items;
+  }
+
+  getSelectedEditorHotspot() {
+    return this.getEditorHotspots().find((item) => item.key === this.editor.selectedKey);
+  }
+
+  getLocalStorage() {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+    return window.localStorage;
+  }
+
+  drawEditorOverlay() {
+    const ctx = this.ctx;
+    const items = this.getEditorHotspots();
+    const scene = this.story.scenes[this.editor.sceneIndex];
+    this.regions = [];
+    this.drawEditorHotspots(items);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,10,0.46)';
+    ctx.fillRect(0, 0, this.width, 88);
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('交互点编辑器', 16, 34);
+    ctx.fillStyle = '#b7d7ce';
+    ctx.font = '12px Arial';
+    const title = scene ? scene.title : '无场景';
+    ctx.fillText(title + ' · 拖动画面中色块调整位置', 16, 58);
+    this.drawButton(this.width - 72, 18, 56, 32, '退出', () => this.closeHotspotEditor(), {
+      fontSize: 13,
+      fill: 'rgba(78,48,52,0.94)',
+      stroke: 'rgba(226,196,140,0.72)',
+    });
+    ctx.restore();
+
+    this.drawEditorPanel(items, scene);
+  }
+
+  drawEditorHotspots(items) {
+    const ctx = this.ctx;
+    items.forEach((item, index) => {
+      const rect = this.scaledRect(item.spot);
+      const selected = item.key === this.editor.selectedKey;
+      ctx.save();
+      ctx.lineWidth = selected ? 3 : 2;
+      ctx.setLineDash(selected ? [] : [6, 5]);
+      ctx.fillStyle = selected ? 'rgba(255, 72, 72, 0.25)' : 'rgba(68, 180, 224, 0.18)';
+      ctx.strokeStyle = selected ? 'rgba(255, 88, 88, 0.96)' : 'rgba(126, 211, 236, 0.84)';
+      ctx.shadowColor = selected ? 'rgba(255, 88, 88, 0.38)' : 'rgba(126, 211, 236, 0.2)';
+      ctx.shadowBlur = selected ? 14 : 8;
+      this.roundRect(rect.x, rect.y, rect.w, rect.h, 8, ctx.fillStyle, ctx.strokeStyle);
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = '#fff8e6';
+      ctx.font = 'bold 12px Arial';
+      ctx.textAlign = 'center';
+      const label = (index + 1) + '. ' + (item.spot.label || item.spot.id);
+      ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 4);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    });
+  }
+
+  drawEditorPanel(items, scene) {
+    const ctx = this.ctx;
+    const panel = this.getEditorPanelRect();
+    this.roundRect(panel.x, panel.y, panel.w, panel.h, 10, 'rgba(17,22,25,0.96)', 'rgba(159,209,200,0.62)');
+
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 15px Arial';
+    ctx.fillText('场景', panel.x + 12, panel.y + 26);
+    ctx.fillStyle = '#b7d7ce';
+    ctx.font = '11px Arial';
+    ctx.fillText((this.editor.sceneIndex + 1) + '/' + this.story.scenes.length, panel.x + panel.w - 38, panel.y + 26);
+    this.drawButton(panel.x + 10, panel.y + 40, 44, 28, '上', () => this.changeEditorScene(-1), {
+      fontSize: 12,
+      fill: '#35464a',
+      stroke: '#9fd1c8',
+    });
+    this.drawButton(panel.x + panel.w - 54, panel.y + 40, 44, 28, '下', () => this.changeEditorScene(1), {
+      fontSize: 12,
+      fill: '#35464a',
+      stroke: '#9fd1c8',
+    });
+
+    ctx.fillStyle = '#d5a764';
+    ctx.font = 'bold 12px Arial';
+    this.wrapText(scene ? scene.title : '', panel.x + 12, panel.y + 88, panel.w - 24, 16, 2);
+
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText('交互点', panel.x + 12, panel.y + 128);
+    if (!items.length) {
+      ctx.fillStyle = '#cfc4b8';
+      ctx.font = '12px Arial';
+      this.wrapText('当前场景没有交互点', panel.x + 12, panel.y + 154, panel.w - 24, 18, 2);
+    }
+
+    const rowH = 38;
+    const listY = panel.y + 142;
+    const listBottom = panel.y + panel.h - 150;
+    items.forEach((item, index) => {
+      const rowY = listY + index * (rowH + 6);
+      if (rowY + rowH > listBottom) {
+        return;
+      }
+      const selected = item.key === this.editor.selectedKey;
+      this.roundRect(
+        panel.x + 10,
+        rowY,
+        panel.w - 20,
+        rowH,
+        7,
+        selected ? 'rgba(117,55,55,0.95)' : 'rgba(48,54,58,0.92)',
+        selected ? 'rgba(255,160,124,0.86)' : 'rgba(126,111,92,0.55)'
+      );
+      ctx.fillStyle = selected ? '#ffe6d0' : '#f8efe4';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText((index + 1) + '. ' + (item.spot.label || item.spot.id), panel.x + 18, rowY + 16);
+      ctx.fillStyle = '#b7d7ce';
+      ctx.font = '10px Arial';
+      ctx.fillText((item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1), panel.x + 18, rowY + 31);
+      this.addRegion(panel.x + 10, rowY, panel.w - 20, rowH, (tapX, tapY) => this.selectEditorHotspot(item, true, tapX, tapY));
+    });
+
+    const selected = this.getSelectedEditorHotspot();
+    const toolY = panel.y + panel.h - 138;
+    ctx.fillStyle = '#fff1d5';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText(selected ? selected.spot.label || selected.spot.id : '未选择', panel.x + 12, toolY);
+    if (selected) {
+      this.drawButton(panel.x + panel.w - 60, toolY - 18, 50, 24, '重置', () => this.resetSelectedEditorHotspot(), {
+        fontSize: 11,
+        fill: '#4d3436',
+        stroke: '#d5a764',
+      });
+      ctx.fillStyle = '#cfc4b8';
+      ctx.font = '10px Arial';
+      ctx.fillText(
+        'x ' + selected.spot.x.toFixed(2) + '  y ' + selected.spot.y.toFixed(2),
+        panel.x + 12,
+        toolY + 18
+      );
+      const btnY = toolY + 30;
+      const btnW = (panel.w - 32) / 2;
+      this.drawButton(panel.x + 10, btnY, btnW, 28, '宽 -', () => this.resizeEditorHotspot(-0.02, 0), {
+        fontSize: 12,
+        fill: '#4f4642',
+        stroke: '#d5a764',
+      });
+      this.drawButton(panel.x + 22 + btnW, btnY, btnW, 28, '宽 +', () => this.resizeEditorHotspot(0.02, 0), {
+        fontSize: 12,
+        fill: '#4f4642',
+        stroke: '#d5a764',
+      });
+      this.drawButton(panel.x + 10, btnY + 36, btnW, 28, '高 -', () => this.resizeEditorHotspot(0, -0.02), {
+        fontSize: 12,
+        fill: '#4f4642',
+        stroke: '#d5a764',
+      });
+      this.drawButton(panel.x + 22 + btnW, btnY + 36, btnW, 28, '高 +', () => this.resizeEditorHotspot(0, 0.02), {
+        fontSize: 12,
+        fill: '#4f4642',
+        stroke: '#d5a764',
+      });
+    }
+
+    const saveLabel = this.editor.dirty ? '保存*' : '保存';
+    this.drawButton(panel.x + 10, panel.y + panel.h - 42, panel.w - 20, 32, saveLabel, () => this.saveHotspotOverrides(), {
+      fontSize: 14,
+      fill: '#28645f',
+      stroke: '#9fd1c8',
+    });
+  }
+
+  getEditorPanelRect() {
+    const isPortrait = this.isPortraitLayout();
+    const w = Math.min(isPortrait ? 142 : 190, this.width * (isPortrait ? 0.38 : 0.3));
+    const x = this.width - w - 8;
+    const y = 96;
+    const h = this.height - 110;
+    return { x, y, w, h };
+  }
+
   scaledRect(spot) {
     return {
       x: spot.x * this.width,
@@ -1830,6 +2309,14 @@ export default class StoryEngine {
 
   addRegion(x, y, w, h, onTap) {
     this.regions.push({ x, y, w, h, onTap });
+  }
+
+  clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  roundCoord(value) {
+    return Math.round(value * 10000) / 10000;
   }
 
   roundRect(x, y, w, h, radius, fill, stroke) {
