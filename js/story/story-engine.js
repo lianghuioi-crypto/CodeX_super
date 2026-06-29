@@ -47,6 +47,15 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.21',
+    date: '2026-06-26',
+    items: [
+      '交互点编辑入口改为本地调试页专用，线上页面默认不显示编辑模式。',
+      '交互点保存改为写入工程内覆盖文件，方便后续提交到 GitHub 后直接生效。',
+      '本地保存失败时会提示启动本地编辑服务，避免误以为只保存到了浏览器缓存。',
+    ],
+  },
+  {
     version: '1.20',
     date: '2026-06-26',
     items: [
@@ -269,7 +278,9 @@ export default class StoryEngine {
     this.changelogPage = 0;
     this.transition = null;
     this.doorOpenedAt = 0;
-    this.hotspotOverrides = this.loadHotspotOverrides();
+    this.editorEnabled = Boolean(options.editorEnabled);
+    this.persistHotspotOverrides = options.persistHotspotOverrides || null;
+    this.hotspotOverrides = options.hotspotOverrides || this.loadHotspotOverrides();
     this.defaultHotspotRects = this.captureDefaultHotspotRects();
     this.editor = {
       active: false,
@@ -1052,13 +1063,15 @@ export default class StoryEngine {
     });
     const editorW = Math.min(isPortrait ? 58 : 72, this.width * 0.18);
     const editorY = Math.max(86, y + h + 18);
-    this.drawButton(14, editorY, editorW, h, '编辑', () => {
-      this.openHotspotEditor();
-    }, {
-      fontSize: isPortrait ? 12 : 14,
-      fill: 'rgba(36,64,66,0.88)',
-      stroke: 'rgba(159,209,200,0.72)',
-    });
+    if (this.editorEnabled) {
+      this.drawButton(14, editorY, editorW, h, '编辑', () => {
+        this.openHotspotEditor();
+      }, {
+        fontSize: isPortrait ? 12 : 14,
+        fill: 'rgba(36,64,66,0.88)',
+        stroke: 'rgba(159,209,200,0.72)',
+      });
+    }
   }
 
   drawCurrentStep() {
@@ -2014,18 +2027,19 @@ export default class StoryEngine {
     this.showToast('已恢复默认位置，记得保存');
   }
 
-  saveHotspotOverrides() {
+  async saveHotspotOverrides() {
     try {
-      const storage = this.getLocalStorage();
-      if (!storage) {
-        this.showToast('当前环境不支持本地保存');
-        return;
+      if (this.persistHotspotOverrides) {
+        await this.persistHotspotOverrides(this.hotspotOverrides);
       }
-      storage.setItem('feiyi-hotspot-overrides-v1', JSON.stringify(this.hotspotOverrides));
+      const storage = this.getLocalStorage();
+      if (storage) {
+        storage.setItem('feiyi-hotspot-overrides-v1', JSON.stringify(this.hotspotOverrides));
+      }
       this.editor.dirty = false;
-      this.showToast('交互点已保存，可直接预览');
+      this.showToast(this.persistHotspotOverrides ? '已写入本地工程，可直接预览' : '交互点已保存，可直接预览');
     } catch (error) {
-      this.showToast('保存失败，请检查浏览器权限');
+      this.showToast('保存失败，请启动本地编辑服务');
     }
   }
 
