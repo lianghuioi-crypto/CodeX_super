@@ -62,6 +62,15 @@ const PROP_ASSETS = {
 
 const CHANGELOG = [
   {
+    version: '1.23',
+    date: '2026-06-29',
+    items: [
+      '新增章节幕布过渡：关幕后在幕布中央显示目标章节名，再开幕进入章节。',
+      '第一章结束后会短暂停留并自动进入第二章，玩家也可点击“进入下一章”立即触发。',
+      '章节选择改为同样使用幕布过渡，选择任意章节都会先展示章节名再开始体验。',
+    ],
+  },
+  {
     version: '1.22',
     date: '2026-06-29',
     items: [
@@ -302,6 +311,7 @@ export default class StoryEngine {
     this.overlay = 'loading';
     this.changelogPage = 0;
     this.transition = null;
+    this.endingAutoTransition = null;
     this.doorOpenedAt = 0;
     this.editorEnabled = Boolean(options.editorEnabled);
     this.persistHotspotOverrides = options.persistHotspotOverrides || null;
@@ -328,8 +338,15 @@ export default class StoryEngine {
     this.startChapter(this.chapterIndex);
   }
 
-  startChapter(index = 0) {
+  startChapter(index = 0, options = {}) {
     this.startRequested = true;
+    this.activateChapter(index, {
+      showChangelog: options.showChangelog !== false,
+      preserveTransition: false,
+    });
+  }
+
+  activateChapter(index = 0, options = {}) {
     this.chapterIndex = Math.max(0, Math.min(this.chapters.length - 1, index));
     this.currentChapter = this.chapters[this.chapterIndex] || this.chapters[0];
     this.story.scenes = this.currentChapter.scenes || [];
@@ -340,9 +357,12 @@ export default class StoryEngine {
     this.inventory = [];
     this.mergeProgress = {};
     this.finished = false;
-    this.transition = null;
+    if (!options.preserveTransition) {
+      this.transition = null;
+    }
+    this.endingAutoTransition = null;
     this.doorOpenedAt = 0;
-    this.overlay = this.assetsReady ? 'changelog' : 'loading';
+    this.overlay = this.assetsReady ? (options.showChangelog ? 'changelog' : '') : 'loading';
     this.changelogPage = 0;
     if (this.assetsReady) {
       this.showToast(this.currentChapter.title || '点击对话推进，点击发光区域调查');
@@ -396,9 +416,14 @@ export default class StoryEngine {
 
   update() {
     if (!this.transition) {
+      this.updateEndingAutoTransition();
       return;
     }
     const elapsed = Date.now() - this.transition.startedAt;
+    if (this.transition.style === 'chapter-curtain') {
+      this.updateChapterTransition(elapsed);
+      return;
+    }
     if (!this.transition.switched && elapsed >= this.transition.duration * 0.5) {
       this.transition.switched = true;
       this.goToNextScene({ preserveTransition: true });
@@ -408,6 +433,44 @@ export default class StoryEngine {
     }
     if (elapsed >= this.transition.duration) {
       this.transition = null;
+    }
+  }
+
+  updateChapterTransition(elapsed) {
+    if (!this.transition.switched && elapsed >= this.transition.duration * 0.5) {
+      this.transition.switched = true;
+      this.activateChapter(this.transition.targetChapterIndex, {
+        showChangelog: false,
+        preserveTransition: true,
+      });
+    }
+    if (elapsed >= this.transition.duration) {
+      const title = this.currentChapter && this.currentChapter.title ? this.currentChapter.title : '章节开始';
+      this.transition = null;
+      this.showToast(title);
+    }
+  }
+
+  updateEndingAutoTransition() {
+    if (this.overlay || this.editor.active || this.messageQueue.length > 0) {
+      this.endingAutoTransition = null;
+      return;
+    }
+    const step = this.getStep();
+    if (!step || step.type !== 'ending' || !this.hasNextChapter()) {
+      this.endingAutoTransition = null;
+      return;
+    }
+    const key = [this.chapterIndex, this.sceneIndex, this.stepIndex].join(':');
+    if (!this.endingAutoTransition || this.endingAutoTransition.key !== key) {
+      this.endingAutoTransition = {
+        key,
+        startedAt: Date.now(),
+      };
+      return;
+    }
+    if (Date.now() - this.endingAutoTransition.startedAt >= 1400) {
+      this.startChapterTransition(this.chapterIndex + 1);
     }
   }
 
@@ -464,6 +527,12 @@ export default class StoryEngine {
       return;
     }
 
+    const currentStep = this.getStep();
+    if (currentStep && currentStep.type === 'ending' && this.hasNextChapter()) {
+      this.startChapterTransition(this.chapterIndex + 1, { duration: 1700 });
+      return;
+    }
+
     const wasLastStep = this.stepIndex >= scene.steps.length - 1;
     if (wasLastStep && this.hasNextScene()) {
       this.startSceneTransition(scene);
@@ -495,6 +564,10 @@ export default class StoryEngine {
     return this.sceneIndex < this.story.scenes.length - 1;
   }
 
+  hasNextChapter() {
+    return this.chapterIndex < this.chapters.length - 1;
+  }
+
   startSceneTransition(scene, options = {}) {
     if (!scene || !this.hasNextScene()) {
       this.goToNextScene();
@@ -508,6 +581,23 @@ export default class StoryEngine {
       switched: false,
       style: options.style || (scene.id === 'stage-open' ? 'curtain' : 'fade'),
       resultMessages: options.resultMessages || null,
+    };
+  }
+
+  startChapterTransition(targetChapterIndex, options = {}) {
+    const safeIndex = Math.max(0, Math.min(this.chapters.length - 1, targetChapterIndex));
+    const targetChapter = this.chapters[safeIndex] || this.chapters[0];
+    this.overlay = '';
+    this.messageQueue = [];
+    this.endingAutoTransition = null;
+    this.transition = {
+      startedAt: Date.now(),
+      duration: options.duration || 1900,
+      switched: false,
+      style: 'chapter-curtain',
+      targetChapterIndex: safeIndex,
+      toTitle: targetChapter && targetChapter.title ? targetChapter.title : '下一章',
+      toSubtitle: targetChapter && targetChapter.subtitle ? targetChapter.subtitle : '',
     };
   }
 
@@ -1396,6 +1486,7 @@ export default class StoryEngine {
   }
 
   drawEnding(step) {
+    const hasNextChapter = this.hasNextChapter();
     const x = 26;
     const y = this.height * 0.28;
     const w = this.width - 52;
@@ -1407,8 +1498,18 @@ export default class StoryEngine {
     this.ctx.fillStyle = '#f8efe4';
     this.ctx.font = '17px Arial';
     this.wrapText(step.text, x + 24, y + 88, w - 48, 28, 4);
-    this.drawButton(x + 24, y + h - 60, w - 48, 40, '回到章节选择', () => {
+    const btnGap = 10;
+    const btnW = hasNextChapter ? (w - 48 - btnGap) / 2 : w - 48;
+    if (hasNextChapter) {
+      this.drawButton(x + 24, y + h - 60, btnW, 40, '进入下一章', () => {
+        this.startChapterTransition(this.chapterIndex + 1, { duration: 1700 });
+      });
+    }
+    this.drawButton(x + 24 + (hasNextChapter ? btnW + btnGap : 0), y + h - 60, btnW, 40, '选择章节', () => {
       this.overlay = 'chapter-select';
+    }, {
+      fill: hasNextChapter ? '#35464a' : '#7d2633',
+      stroke: hasNextChapter ? '#9fd1c8' : '#d5a764',
     });
   }
 
@@ -1829,6 +1930,10 @@ export default class StoryEngine {
     if (!this.transition) {
       return;
     }
+    if (this.transition.style === 'chapter-curtain') {
+      this.drawChapterCurtainTransition();
+      return;
+    }
     if (this.transition.style !== 'curtain') {
       this.drawFadeTransition();
       return;
@@ -1869,6 +1974,62 @@ export default class StoryEngine {
     ctx.fillText(this.transition.toTitle || '下一幕', this.width / 2, this.height * 0.43 + 34);
     ctx.textAlign = 'left';
     ctx.restore();
+  }
+
+  drawChapterCurtainTransition() {
+    const ctx = this.ctx;
+    const elapsed = Date.now() - this.transition.startedAt;
+    const progress = Math.min(1, elapsed / this.transition.duration);
+    let curtain = 1;
+    if (progress < 0.38) {
+      curtain = this.easeOutCubic(progress / 0.38);
+    } else if (progress > 0.68) {
+      curtain = 1 - this.easeInCubic((progress - 0.68) / 0.32);
+    }
+    const titleAlpha = progress < 0.24 || progress > 0.78 ? 0 : Math.min(1, (progress - 0.24) / 0.16, (0.78 - progress) / 0.14);
+    const leftW = this.width * 0.5 * curtain;
+    const rightX = this.width - leftW;
+    const stripeW = Math.max(10, this.width * 0.035);
+
+    ctx.save();
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = '#16080c';
+    ctx.fillRect(0, 0, leftW, this.height);
+    ctx.fillRect(rightX, 0, leftW, this.height);
+
+    ctx.globalAlpha = 0.22 * curtain;
+    ctx.fillStyle = '#8d2635';
+    for (let x = 0; x < leftW; x += stripeW * 2) {
+      ctx.fillRect(x, 0, stripeW, this.height);
+    }
+    for (let x = rightX; x < this.width; x += stripeW * 2) {
+      ctx.fillRect(x, 0, stripeW, this.height);
+    }
+
+    if (titleAlpha > 0) {
+      ctx.globalAlpha = titleAlpha;
+      ctx.fillStyle = '#fff1d5';
+      ctx.font = 'bold 25px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.transition.toTitle || '下一章', this.width / 2, this.height * 0.43);
+      if (this.transition.toSubtitle) {
+        ctx.fillStyle = '#d5a764';
+        ctx.font = '14px Arial';
+        ctx.fillText(this.transition.toSubtitle, this.width / 2, this.height * 0.43 + 34);
+      }
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
+  }
+
+  easeOutCubic(value) {
+    const t = Math.max(0, Math.min(1, value));
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  easeInCubic(value) {
+    const t = Math.max(0, Math.min(1, value));
+    return t * t * t;
   }
 
   drawFadeTransition() {
@@ -2028,8 +2189,7 @@ export default class StoryEngine {
       ctx.fillText(selected ? '当前章节' : '点击开始', cardX + cardW - 16, cy + cardH - 16);
       ctx.textAlign = 'left';
       this.addRegion(cardX, cy, cardW, cardH, () => {
-        this.startChapter(index);
-        this.overlay = '';
+        this.startChapterTransition(index, { duration: 1700 });
       });
     });
 
