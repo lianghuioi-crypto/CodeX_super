@@ -31,10 +31,21 @@ const CHARACTER_ASSETS = {
     body: 'images/characters/cutouts/shen-qinghe.png',
     avatar: 'images/characters/avatars/shen-qinghe.png',
   },
+  小乙: {
+    body: 'images/characters/cutouts/xiaoyi.png',
+    avatar: 'images/characters/avatars/xiaoyi.png',
+  },
+  绯萤: {
+    body: 'images/characters/cutouts/feiying.png',
+    avatar: 'images/characters/avatars/feiying.png',
+  },
+  沈飞翊: {
+    body: 'images/characters/cutouts/shen-feiyi.png',
+    avatar: 'images/characters/avatars/shen-feiyi.png',
+  },
 };
 
 const PLACEHOLDER_CHARACTER_COLORS = {
-  小乙: '#e3a36f',
 };
 
 const PROP_ASSETS = {
@@ -43,9 +54,23 @@ const PROP_ASSETS = {
   qiyunDoorOpen: 'images/scenes/qiyun-door-open.jpg',
   qiyunDoorClosed: 'images/scenes/qiyun-door-closed.png',
   backstageDoor: 'images/scenes/backstage-door.jpg',
+  ch2BackstageRoom: 'images/scenes/ch2-backstage-room.jpg',
+  ch2XieSeatProps: 'images/scenes/ch2-xie-seat-props.jpg',
+  ch2PropRackRedMud: 'images/scenes/ch2-prop-rack-red-mud.jpg',
+  ch2DressingDoor: 'images/scenes/ch2-dressing-door.jpg',
 };
 
 const CHANGELOG = [
+  {
+    version: '1.22',
+    date: '2026-06-29',
+    items: [
+      '第二章后台戏房接入正式 AI 场景图，按戏房入口、谢无咎专座、道具架红泥、妆阁门前分段切换。',
+      '新增小乙、绯萤、沈飞翊 Q 版角色资源，并为对话生成头像 icon。',
+      '场景切换统一加入柔和淡入淡出，中途换景后再淡入，减少剧情推进时的突兀跳变。',
+      '修正小乙登场时机，敲响铜锣后才在后台戏房中出现。',
+    ],
+  },
   {
     version: '1.21',
     date: '2026-06-26',
@@ -370,9 +395,19 @@ export default class StoryEngine {
   }
 
   update() {
-    if (this.transition && Date.now() - this.transition.startedAt >= this.transition.duration) {
+    if (!this.transition) {
+      return;
+    }
+    const elapsed = Date.now() - this.transition.startedAt;
+    if (!this.transition.switched && elapsed >= this.transition.duration * 0.5) {
+      this.transition.switched = true;
+      this.goToNextScene({ preserveTransition: true });
+      if (this.transition.resultMessages) {
+        this.queueMessages(this.transition.resultMessages, false);
+      }
+    }
+    if (elapsed >= this.transition.duration) {
       this.transition = null;
-      this.goToNextScene();
     }
   }
 
@@ -430,45 +465,49 @@ export default class StoryEngine {
     }
 
     const wasLastStep = this.stepIndex >= scene.steps.length - 1;
-    const shouldTransition = this.shouldPlaySceneTransition(scene, this.getStep());
-    if (wasLastStep && shouldTransition) {
+    if (wasLastStep && this.hasNextScene()) {
       this.startSceneTransition(scene);
       return;
     }
 
     this.stepIndex += 1;
     if (this.stepIndex >= scene.steps.length) {
-      this.goToNextScene();
+      this.startSceneTransition(scene);
     }
   }
 
-  goToNextScene() {
+  goToNextScene(options = {}) {
     this.sceneIndex += 1;
     this.stepIndex = 0;
+    this.messageQueue = [];
     if (this.sceneIndex >= this.story.scenes.length) {
       this.finished = true;
       this.onComplete();
     } else {
       this.showToast(this.getScene().title);
     }
+    if (!options.preserveTransition) {
+      this.transition = null;
+    }
   }
 
-  shouldPlaySceneTransition(scene, step) {
-    return Boolean(
-      scene &&
-        step &&
-        scene.id === 'stage-open' &&
-        step.type === 'dialog' &&
-        step.speaker === '小伶人'
-    );
+  hasNextScene() {
+    return this.sceneIndex < this.story.scenes.length - 1;
   }
 
-  startSceneTransition(scene) {
+  startSceneTransition(scene, options = {}) {
+    if (!scene || !this.hasNextScene()) {
+      this.goToNextScene();
+      return;
+    }
     this.transition = {
       startedAt: Date.now(),
-      duration: 1350,
+      duration: options.duration || (scene.id === 'stage-open' ? 1350 : 920),
       fromTitle: scene.title,
       toTitle: this.story.scenes[this.sceneIndex + 1] && this.story.scenes[this.sceneIndex + 1].title,
+      switched: false,
+      style: options.style || (scene.id === 'stage-open' ? 'curtain' : 'fade'),
+      resultMessages: options.resultMessages || null,
     };
   }
 
@@ -665,7 +704,7 @@ export default class StoryEngine {
     const maxCharacterScale = isPortrait ? 1.16 : 1;
     const isStageAfterDeath = this.isStageAfterDeathReveal();
     const usesStageArt = scene.id === 'stage-open' || scene.id === 'body-check';
-    const usesBackstageRoom = scene.visual === 'backstage-room';
+    const usesBackstageRoom = this.isBackstageRoomScene(scene);
 
     if (usesBackstageRoom) {
       this.drawBackstageRoomBackground(w * 0.06, stageTop, w * 0.88, stageH, scene);
@@ -767,7 +806,22 @@ export default class StoryEngine {
 
   drawBackstageRoomBackground(x, y, w, h, scene) {
     const ctx = this.ctx;
+    const image = this.getBackstageSceneImage(scene);
     ctx.save();
+    if (image && image.loaded) {
+      this.drawBackstageImageCover(image, x, y, w, h, 8);
+      const shade = ctx.createLinearGradient(0, y, 0, y + h);
+      shade.addColorStop(0, 'rgba(20, 12, 10, 0.02)');
+      shade.addColorStop(0.56, 'rgba(20, 12, 10, 0.03)');
+      shade.addColorStop(1, 'rgba(12, 8, 8, 0.24)');
+      ctx.fillStyle = shade;
+      this.clipRoundRect(x, y, w, h, 8);
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+      this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
+      return;
+    }
+
     const gradient = ctx.createLinearGradient(x, y, x, y + h);
     gradient.addColorStop(0, '#3a2119');
     gradient.addColorStop(0.56, '#231719');
@@ -798,6 +852,28 @@ export default class StoryEngine {
     this.roundRect(x, y, w, h, 8, '', 'rgba(226,196,140,0.42)');
   }
 
+  getBackstageSceneImage(scene) {
+    if (!scene) {
+      return null;
+    }
+    const imageKeyByVisual = {
+      'ch2-backstage-room': 'ch2BackstageRoom',
+      'ch2-xie-seat-props': 'ch2XieSeatProps',
+      'ch2-prop-rack-red-mud': 'ch2PropRackRedMud',
+      'ch2-dressing-door': 'ch2DressingDoor',
+    };
+    const imageKeyByScene = {
+      'backstage-room-entry': 'ch2BackstageRoom',
+      'backstage-xie-seat': 'ch2XieSeatProps',
+      'backstage-props': 'ch2PropRackRedMud',
+      'backstage-deduction': 'ch2XieSeatProps',
+      'backstage-red-mud': 'ch2PropRackRedMud',
+      'backstage-dressing-door': 'ch2DressingDoor',
+    };
+    const key = imageKeyByVisual[scene.visual] || imageKeyByScene[scene.id] || 'ch2BackstageRoom';
+    return this.propImages[key];
+  }
+
   drawSceneProp(label, x, y, w, h, fill) {
     this.roundRect(x, y, w, h, 5, fill, 'rgba(245,213,152,0.42)');
     this.ctx.fillStyle = 'rgba(255,241,213,0.86)';
@@ -809,36 +885,70 @@ export default class StoryEngine {
 
   drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale) {
     const w = this.width;
-    this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.5, '#31516b', {
-      width: Math.min(106 * maxCharacterScale, w * 0.098 * characterScale),
-      height: Math.min(140 * maxCharacterScale, stageH * 0.42 * characterScale),
+    const scene = this.getScene();
+    this.drawCharacter('沈清和', w * 0.14, stageTop + stageH * 0.54, '#31516b', {
+      width: Math.min(100 * maxCharacterScale, w * 0.092 * characterScale),
+      height: Math.min(132 * maxCharacterScale, stageH * 0.38 * characterScale),
     });
-    this.drawCharacter('昭雪', w * 0.32, stageTop + stageH * 0.66, '#d8d1bf', {
-      width: Math.min(72 * maxCharacterScale, w * 0.066 * characterScale),
-      height: Math.min(88 * maxCharacterScale, stageH * 0.26 * characterScale),
+    this.drawCharacter('昭雪', w * 0.27, stageTop + stageH * 0.69, '#d8d1bf', {
+      width: Math.min(68 * maxCharacterScale, w * 0.062 * characterScale),
+      height: Math.min(82 * maxCharacterScale, stageH * 0.24 * characterScale),
     });
-    this.drawCharacter('掌柜', w * 0.76, stageTop + stageH * 0.52, '#476a70', {
-      width: Math.min(96 * maxCharacterScale, w * 0.086 * characterScale),
-      height: Math.min(130 * maxCharacterScale, stageH * 0.39 * characterScale),
-    });
+    if (this.shouldShowZhangguiBackstage()) {
+      this.drawCharacter('掌柜', w * 0.78, stageTop + stageH * 0.55, '#476a70', {
+        width: Math.min(88 * maxCharacterScale, w * 0.08 * characterScale),
+        height: Math.min(118 * maxCharacterScale, stageH * 0.35 * characterScale),
+      });
+    }
     if (this.shouldShowXiaoyi()) {
-      this.drawCharacter('小乙', w * 0.62, stageTop + stageH * 0.58, '#d99167', {
-        width: Math.min(76 * maxCharacterScale, w * 0.07 * characterScale),
-        height: Math.min(108 * maxCharacterScale, stageH * 0.32 * characterScale),
+      const xiaoyiX = scene && scene.id === 'backstage-dressing-door' ? w * 0.68 : w * 0.58;
+      this.drawCharacter('小乙', xiaoyiX, stageTop + stageH * 0.64, '#d99167', {
+        width: Math.min(74 * maxCharacterScale, w * 0.066 * characterScale),
+        height: Math.min(104 * maxCharacterScale, stageH * 0.3 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? 2 : 0,
+      });
+    }
+    if (scene && scene.id === 'backstage-props' && this.stepIndex >= 5) {
+      this.drawCharacter('绯萤', w * 0.43, stageTop + stageH * 0.57, '#a73a3d', {
+        width: Math.min(76 * maxCharacterScale, w * 0.068 * characterScale),
+        height: Math.min(106 * maxCharacterScale, stageH * 0.31 * characterScale),
       });
     }
   }
 
   shouldShowXiaoyi() {
     const scene = this.getScene();
-    if (!scene || scene.visual !== 'backstage-room') {
+    if (!this.isBackstageRoomScene(scene)) {
       return false;
     }
     if (scene.id === 'backstage-room-entry') {
-      return this.stepIndex >= 4;
+      return this.stepIndex === 8 && this.messageQueue.some((item) => item.speaker === '小乙');
+    }
+    if (scene.id === 'backstage-deduction' && this.stepIndex >= 2) {
+      return false;
     }
     return scene.id !== 'backstage-dressing-door';
+  }
+
+  shouldShowZhangguiBackstage() {
+    const scene = this.getScene();
+    if (!this.isBackstageRoomScene(scene)) {
+      return false;
+    }
+    if (scene.id === 'backstage-deduction' && this.stepIndex >= 1) {
+      return false;
+    }
+    if (scene.id === 'backstage-red-mud' && this.stepIndex >= 2) {
+      return false;
+    }
+    if (scene.id === 'backstage-dressing-door') {
+      return false;
+    }
+    return true;
+  }
+
+  isBackstageRoomScene(scene) {
+    return Boolean(scene && (scene.visual === 'backstage-room' || String(scene.visual || '').startsWith('ch2-')));
   }
 
   drawStageArtBackground(x, y, w, h) {
@@ -1174,8 +1284,11 @@ export default class StoryEngine {
           this.doorOpenedAt = Date.now();
         }
         if (spot.advanceBeforeResult) {
-          this.goToNextScene();
-          this.queueMessages(spot.result || [], false);
+          this.startSceneTransition(this.getScene(), {
+            resultMessages: spot.result || [],
+            style: 'fade',
+            duration: 760,
+          });
           return;
         }
         if (spot.item && !this.inventory.includes(spot.item)) {
@@ -1716,6 +1829,10 @@ export default class StoryEngine {
     if (!this.transition) {
       return;
     }
+    if (this.transition.style !== 'curtain') {
+      this.drawFadeTransition();
+      return;
+    }
     const ctx = this.ctx;
     const elapsed = Date.now() - this.transition.startedAt;
     const progress = Math.min(1, elapsed / this.transition.duration);
@@ -1750,6 +1867,25 @@ export default class StoryEngine {
     ctx.fillStyle = '#d5a764';
     ctx.font = '14px Arial';
     ctx.fillText(this.transition.toTitle || '下一幕', this.width / 2, this.height * 0.43 + 34);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  drawFadeTransition() {
+    const ctx = this.ctx;
+    const elapsed = Date.now() - this.transition.startedAt;
+    const progress = Math.min(1, elapsed / this.transition.duration);
+    const alpha = progress < 0.5 ? progress / 0.5 : 1 - (progress - 0.5) / 0.5;
+    const eased = Math.sin(Math.max(0, Math.min(1, alpha)) * Math.PI * 0.5);
+    ctx.save();
+    ctx.globalAlpha = eased * 0.92;
+    ctx.fillStyle = '#080608';
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.globalAlpha = eased;
+    ctx.fillStyle = '#d5a764';
+    ctx.font = 'bold 15px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.transition.toTitle || '下一幕', this.width / 2, this.height * 0.47);
     ctx.textAlign = 'left';
     ctx.restore();
   }
