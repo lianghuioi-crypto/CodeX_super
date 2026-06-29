@@ -291,7 +291,7 @@ const CHAPTER_TWO = {
       id: 'backstage-room-entry',
       title: '倚云楼 · 戏房',
       placeLabel: '脂粉、戏服与倾倒妆台之间',
-      visual: 'backstage-room',
+      visual: 'ch2-backstage-room',
       palette: ['#2b1c18', '#7d3f2e', '#d6a15e'],
       notes: ['妆台倾倒', '鬼面悬墙', '铜锣靠墙'],
       steps: [
@@ -397,7 +397,7 @@ const CHAPTER_TWO = {
       id: 'backstage-xie-seat',
       title: '倚云楼 · 谢无咎专座',
       placeLabel: '长凳、茶盏与半枚润嗓梅',
-      visual: 'backstage-room',
+      visual: 'ch2-xie-seat-props',
       palette: ['#241d1c', '#75422e', '#d4a66a'],
       notes: ['小乙现身', '长凳专座', '茶盏冷透'],
       steps: [
@@ -551,7 +551,7 @@ const CHAPTER_TWO = {
       id: 'backstage-props',
       title: '倚云楼 · 道具架',
       placeLabel: '鬼铃、血包与走位板',
-      visual: 'backstage-room',
+      visual: 'ch2-prop-rack-red-mud',
       palette: ['#211719', '#65312f', '#c99058'],
       notes: ['戏鞋红泥', '血包将空', '走位被改'],
       steps: [
@@ -728,7 +728,7 @@ const CHAPTER_TWO = {
       id: 'backstage-deduction',
       title: '倚云楼 · 暂歇',
       placeLabel: '掌柜带走小乙后的短暂空隙',
-      visual: 'backstage-room',
+      visual: 'ch2-xie-seat-props',
       palette: ['#1d1a1d', '#55322e', '#b98b5f'],
       notes: ['掌柜打断', '糯米纸', '证物归桌'],
       steps: [
@@ -847,7 +847,7 @@ const CHAPTER_TWO = {
       id: 'backstage-red-mud',
       title: '倚云楼 · 红泥戏鞋',
       placeLabel: '一只不属于倚云楼的鞋',
-      visual: 'backstage-room',
+      visual: 'ch2-prop-rack-red-mud',
       palette: ['#211d1b', '#6b352b', '#d0a05f'],
       notes: ['红泥来自后巷', '鞋底无云纹', '外人来过'],
       steps: [
@@ -991,7 +991,7 @@ const CHAPTER_TWO = {
       id: 'backstage-dressing-door',
       title: '倚云楼 · 妆阁门前',
       placeLabel: '三年前绯衣娘子的独用妆阁',
-      visual: 'backstage-room',
+      visual: 'ch2-dressing-door',
       palette: ['#1c171a', '#542b32', '#c9945f'],
       notes: ['小门紧闭', '昭雪钻入', '妆阁将启'],
       steps: [
