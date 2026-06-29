@@ -60,7 +60,45 @@ const PROP_ASSETS = {
   ch2DressingDoor: 'images/scenes/ch2-dressing-door.jpg',
 };
 
+const STORY_ATLAS = {
+  src: 'images/story-atlas.png',
+  sprites: {
+    'images/characters/cutouts/binke.png': { x: 3, y: 3, w: 218, h: 384 },
+    'images/characters/cutouts/feiying.png': { x: 224, y: 3, w: 221, h: 384 },
+    'images/characters/cutouts/nanling.png': { x: 448, y: 3, w: 288, h: 384 },
+    'images/characters/cutouts/nvling.png': { x: 739, y: 3, w: 222, h: 384 },
+    'images/characters/cutouts/shen-feiyi.png': { x: 3, y: 390, w: 239, h: 384 },
+    'images/characters/cutouts/shen-qinghe.png': { x: 245, y: 390, w: 226, h: 384 },
+    'images/characters/cutouts/xiaolingren.png': { x: 474, y: 390, w: 200, h: 384 },
+    'images/characters/cutouts/xiaoyi.png': { x: 677, y: 390, w: 223, h: 384 },
+    'images/characters/cutouts/xie-wujiu.png': { x: 3, y: 777, w: 552, h: 384 },
+    'images/characters/cutouts/zhanggui.png': { x: 558, y: 777, w: 172, h: 384 },
+    'images/characters/cutouts/zhaoxue.png': { x: 3, y: 1164, w: 332, h: 384 },
+    'images/characters/avatars/binke.png': { x: 338, y: 1164, w: 160, h: 160 },
+    'images/characters/avatars/feiying.png': { x: 501, y: 1164, w: 160, h: 160 },
+    'images/characters/avatars/nanling.png': { x: 664, y: 1164, w: 160, h: 160 },
+    'images/characters/avatars/nvling.png': { x: 827, y: 1164, w: 160, h: 160 },
+    'images/characters/avatars/shen-feiyi.png': { x: 3, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/shen-qinghe.png': { x: 166, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/xiaolingren.png': { x: 329, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/xiaoyi.png': { x: 492, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/xie-wujiu.png': { x: 655, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/zhanggui.png': { x: 818, y: 1551, w: 160, h: 160 },
+    'images/characters/avatars/zhaoxue.png': { x: 3, y: 1714, w: 160, h: 160 },
+    'images/props/tongjing-nvgui.png': { x: 166, y: 1714, w: 177, h: 220 },
+  },
+};
+
 const CHANGELOG = [
+  {
+    version: '1.24',
+    date: '2026-06-29',
+    items: [
+      '所有场景图按约四分之一像素面积缩小并重新压缩，降低首屏预加载体积。',
+      '角色立绘、对话头像和铜镜女鬼合成一张剧情 atlas，减少运行时图片请求数。',
+      '剧情渲染改为从 atlas 裁切角色和头像，同时保留原路径作为资源回退。',
+    ],
+  },
   {
     version: '1.23',
     date: '2026-06-29',
@@ -307,6 +345,7 @@ export default class StoryEngine {
     this.toastUntil = 0;
     this.characterImages = {};
     this.propImages = {};
+    this.storyAtlas = null;
     this.activeSpeaker = '';
     this.overlay = 'loading';
     this.changelogPage = 0;
@@ -691,8 +730,10 @@ export default class StoryEngine {
 
   preloadAssets() {
     const promises = [];
-    this.loadCharacterImages(promises);
+    this.storyAtlas = this.loadImage(STORY_ATLAS.src, promises);
     this.loadPropImages(promises);
+    this.loadCharacterImages();
+    this.loadAtlasPropImages();
     Promise.all(promises).then(() => {
       this.assetsReady = true;
       if (this.startRequested) {
@@ -703,19 +744,55 @@ export default class StoryEngine {
     });
   }
 
-  loadCharacterImages(promises) {
+  loadCharacterImages() {
     Object.entries(CHARACTER_ASSETS).forEach(([name, asset]) => {
       this.characterImages[name] = {
-        body: this.loadImage(asset.body, promises),
-        avatar: this.loadImage(asset.avatar, promises),
+        body: this.createAtlasSprite(asset.body),
+        avatar: this.createAtlasSprite(asset.avatar),
       };
     });
   }
 
   loadPropImages(promises) {
     Object.entries(PROP_ASSETS).forEach(([name, src]) => {
+      if (this.isAtlasAsset(src)) {
+        return;
+      }
       this.propImages[name] = this.loadImage(src, promises);
     });
+  }
+
+  loadAtlasPropImages() {
+    Object.entries(PROP_ASSETS).forEach(([name, src]) => {
+      if (this.isAtlasAsset(src)) {
+        this.propImages[name] = this.createAtlasSprite(src);
+      }
+    });
+  }
+
+  isAtlasAsset(src) {
+    return Boolean(STORY_ATLAS.sprites[src]);
+  }
+
+  createAtlasSprite(src) {
+    const frame = STORY_ATLAS.sprites[src];
+    if (!frame) {
+      return null;
+    }
+    return {
+      atlas: this.storyAtlas,
+      frame,
+      width: frame.w,
+      height: frame.h,
+      naturalWidth: frame.w,
+      naturalHeight: frame.h,
+      get loaded() {
+        return Boolean(this.atlas && this.atlas.loaded);
+      },
+      get failed() {
+        return Boolean(this.atlas && this.atlas.failed);
+      },
+    };
   }
 
   loadImage(src, promises) {
@@ -1138,7 +1215,7 @@ export default class StoryEngine {
 
     this.ctx.save();
     this.clipRoundRect(x, y, w, h, radius);
-    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.drawAsset(image, sx, sy, sw, sh, x, y, w, h);
     this.ctx.restore();
   }
 
@@ -1172,7 +1249,7 @@ export default class StoryEngine {
 
     this.ctx.save();
     this.clipRoundRect(x, y, w, h, radius);
-    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.drawAsset(image, sx, sy, sw, sh, x, y, w, h);
     this.ctx.restore();
   }
 
@@ -1207,7 +1284,7 @@ export default class StoryEngine {
 
     this.ctx.save();
     this.clipRoundRect(x, y, w, h, radius);
-    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.drawAsset(image, sx, sy, sw, sh, x, y, w, h);
     this.ctx.restore();
   }
 
@@ -1662,7 +1739,7 @@ export default class StoryEngine {
       this.drawActiveGlow(drawX, drawY, width, height);
     }
     if (image && image.loaded) {
-      this.ctx.drawImage(image, visualRect.x, visualRect.y, visualRect.w, visualRect.h);
+      this.drawAsset(image, 0, 0, image.naturalWidth || image.width, image.naturalHeight || image.height, visualRect.x, visualRect.y, visualRect.w, visualRect.h);
     } else {
       this.roundRect(drawX, drawY, width, height, 8, PLACEHOLDER_CHARACTER_COLORS[label] || color, '#e2c48c');
       this.roundRect(drawX + width * 0.28, drawY - height * 0.18, width * 0.44, width * 0.44, width * 0.22, '#e8d1b0', '#6d4e39');
@@ -1706,7 +1783,29 @@ export default class StoryEngine {
     if (!rect) {
       return;
     }
-    this.ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+    this.drawAsset(image, 0, 0, image.naturalWidth || image.width, image.naturalHeight || image.height, rect.x, rect.y, rect.w, rect.h);
+  }
+
+  drawAsset(asset, sx, sy, sw, sh, dx, dy, dw, dh) {
+    if (!asset || !asset.loaded) {
+      return;
+    }
+    if (asset.atlas && asset.frame) {
+      const frame = asset.frame;
+      this.ctx.drawImage(
+        asset.atlas,
+        frame.x + sx,
+        frame.y + sy,
+        sw,
+        sh,
+        dx,
+        dy,
+        dw,
+        dh
+      );
+      return;
+    }
+    this.ctx.drawImage(asset, sx, sy, sw, sh, dx, dy, dw, dh);
   }
 
   drawImageCover(image, x, y, w, h, radius) {
@@ -1732,7 +1831,7 @@ export default class StoryEngine {
 
     this.ctx.save();
     this.clipRoundRect(x, y, w, h, radius);
-    this.ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    this.drawAsset(image, sx, sy, sw, sh, x, y, w, h);
     this.ctx.restore();
   }
 
@@ -1742,7 +1841,7 @@ export default class StoryEngine {
     this.roundRect(x - 3, y - 3, size + 6, size + 6, size / 2 + 3, 'rgba(255,244,223,0.95)', '#d5a764');
     if (image && image.loaded) {
       this.clipCircle(x, y, size / 2);
-      this.ctx.drawImage(image, x, y, size, size);
+      this.drawAsset(image, 0, 0, image.naturalWidth || image.width, image.naturalHeight || image.height, x, y, size, size);
     } else {
       this.clipCircle(x, y, size / 2);
       this.ctx.fillStyle = PLACEHOLDER_CHARACTER_COLORS[label] || '#7d2633';

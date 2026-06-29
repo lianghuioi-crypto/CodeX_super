@@ -54,11 +54,18 @@ node local-editor-server.mjs
 │   └── story
 │       ├── story-data.js           章节剧情、交互点、合成链数据
 │       └── story-engine.js         Canvas 剧情体验器引擎
-├── images/characters               角色透明立绘与头像 icon
+├── images/story-atlas.png          剧情角色、头像与道具合图
+├── images/scenes                   剧情场景压缩图
 └── audio                           旧示例音频，当前剧情原型暂未依赖
 ```
 
 ## 更新日志
+
+### v1.24
+
+- 场景图缩小到约四分之一像素面积并重新压缩，降低预加载体积。
+- 角色立绘、对话头像与铜镜女鬼合并为 `images/story-atlas.png`，减少图片请求数。
+- 剧情引擎改为从 atlas 裁切角色和头像，运行时不再请求单体角色图片。
 
 ### v1.21
 
