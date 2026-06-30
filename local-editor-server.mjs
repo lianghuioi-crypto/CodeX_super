@@ -6,6 +6,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 const root = process.cwd();
 const port = Number(process.env.PORT || 8088);
 const overrideFile = resolve(root, 'js/story/hotspot-overrides.json');
+const characterOverrideFile = resolve(root, 'js/story/character-overrides.json');
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -40,6 +41,18 @@ function isHotspotOverrideMap(value) {
   });
 }
 
+function isCharacterOverrideMap(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  return Object.values(value).every((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return false;
+    }
+    return ['x', 'y', 'w', 'h', 'rotation', 'z'].every((key) => Number.isFinite(entry[key]));
+  });
+}
+
 async function readBody(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -58,6 +71,21 @@ async function handleSave(req, res) {
     }
     await writeFile(overrideFile, JSON.stringify(payload, null, 2) + '\n', 'utf8');
     sendJson(res, 200, { ok: true, file: 'js/story/hotspot-overrides.json' });
+  } catch (error) {
+    sendJson(res, 500, { ok: false, error: error.message });
+  }
+}
+
+async function handleCharacterSave(req, res) {
+  try {
+    const body = await readBody(req);
+    const payload = JSON.parse(body || '{}');
+    if (!isCharacterOverrideMap(payload)) {
+      sendJson(res, 400, { ok: false, error: 'Invalid character override payload' });
+      return;
+    }
+    await writeFile(characterOverrideFile, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    sendJson(res, 200, { ok: true, file: 'js/story/character-overrides.json' });
   } catch (error) {
     sendJson(res, 500, { ok: false, error: error.message });
   }
@@ -84,7 +112,7 @@ async function serveStatic(req, res) {
 
   res.writeHead(200, {
     'Content-Type': mimeTypes[extname(filePath).toLowerCase()] || 'application/octet-stream',
-    'Cache-Control': filePath.endsWith('hotspot-overrides.json') ? 'no-store' : 'no-cache',
+    'Cache-Control': filePath.endsWith('hotspot-overrides.json') || filePath.endsWith('character-overrides.json') ? 'no-store' : 'no-cache',
   });
   createReadStream(filePath).pipe(res);
 }
@@ -94,10 +122,15 @@ const server = createServer((req, res) => {
     handleSave(req, res);
     return;
   }
+  if (req.method === 'POST' && req.url === '/__character-overrides') {
+    handleCharacterSave(req, res);
+    return;
+  }
   serveStatic(req, res);
 });
 
 server.listen(port, () => {
   console.log(`Local editor server running at http://localhost:${port}/`);
   console.log('Hotspot saves write to js/story/hotspot-overrides.json');
+  console.log('Character saves write to js/story/character-overrides.json');
 });

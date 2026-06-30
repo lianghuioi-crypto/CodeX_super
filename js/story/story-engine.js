@@ -91,6 +91,15 @@ const STORY_ATLAS = {
 
 const CHANGELOG = [
   {
+    version: '1.25',
+    date: '2026-06-30',
+    items: [
+      '本地编辑器新增角色编辑模式，可调整角色站位、立绘大小、旋转角度和前后层级。',
+      '角色编辑数据可保存到本地工程的 character-overrides.json，后续上传 GitHub 后会直接生效。',
+      '交互点编辑与角色编辑合并为同一个本地调试面板，线上页面仍不显示编辑入口。',
+    ],
+  },
+  {
     version: '1.24',
     date: '2026-06-29',
     items: [
@@ -354,10 +363,15 @@ export default class StoryEngine {
     this.doorOpenedAt = 0;
     this.editorEnabled = Boolean(options.editorEnabled);
     this.persistHotspotOverrides = options.persistHotspotOverrides || null;
+    this.persistCharacterOverrides = options.persistCharacterOverrides || null;
     this.hotspotOverrides = options.hotspotOverrides || this.loadHotspotOverrides();
+    this.characterOverrides = options.characterOverrides || this.loadCharacterOverrides();
     this.defaultHotspotRects = this.captureDefaultHotspotRects();
+    this.sceneCharacterItems = [];
+    this.currentCharacterEditorItems = [];
     this.editor = {
       active: false,
+      mode: 'hotspot',
       sceneIndex: 0,
       selectedKey: '',
       drag: null,
@@ -443,7 +457,11 @@ export default class StoryEngine {
     if (!this.editor.active || !this.editor.drag) {
       return;
     }
-    this.moveEditorSpotTo(x, y);
+    if (this.editor.mode === 'character') {
+      this.moveEditorCharacterTo(x, y);
+    } else {
+      this.moveEditorSpotTo(x, y);
+    }
   }
 
   handlePointerUp() {
@@ -864,11 +882,14 @@ export default class StoryEngine {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
+    this.sceneCharacterItems = [];
+    this.currentCharacterEditorItems = [];
     const isPortrait = h > w * 1.25;
     const stageTop = h * 0.16;
     const stageH = h * (isPortrait ? 0.5 : 0.48);
     const characterScale = isPortrait ? 1.18 : 1;
     const maxCharacterScale = isPortrait ? 1.16 : 1;
+    const isCharacterEditor = this.editor.active && this.editor.mode === 'character';
     const isStageAfterDeath = this.isStageAfterDeathReveal();
     const usesStageArt = scene.id === 'stage-open' || scene.id === 'body-check';
     const usesBackstageRoom = this.isBackstageRoomScene(scene);
@@ -887,70 +908,69 @@ export default class StoryEngine {
       ctx.fillRect(w * 0.12, stageTop + stageH * 0.72, w * 0.76, stageH * 0.16);
     }
 
-    if (this.editor.active) {
-      // Editing needs a clear scene canvas; only backgrounds, notes, and hotspot boxes remain visible.
-    } else if (usesBackstageRoom) {
+    if (usesBackstageRoom) {
       this.drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale);
     } else if (scene.id === 'front-door') {
-      const showZhaoxue = this.shouldShowZhaoxueAtDoor();
-      const showZhanggui = this.shouldShowZhangguiAtDoor();
-      this.drawCharacter('沈清和', w * 0.17, stageTop + stageH * 0.53, '#31516b', {
+      const showZhaoxue = isCharacterEditor || this.shouldShowZhaoxueAtDoor();
+      const showZhanggui = isCharacterEditor || this.shouldShowZhangguiAtDoor();
+      this.queueCharacter('shen-qinghe', '沈清和', w * 0.17, stageTop + stageH * 0.53, '#31516b', {
         width: Math.min(106 * maxCharacterScale, w * 0.098 * characterScale),
         height: Math.min(138 * maxCharacterScale, stageH * 0.41 * characterScale),
       });
       if (showZhaoxue) {
-        this.drawCharacter('昭雪', w * 0.28, stageTop + stageH * 0.64, '#d8d1bf', {
+        this.queueCharacter('zhaoxue', '昭雪', w * 0.28, stageTop + stageH * 0.64, '#d8d1bf', {
           width: Math.min(70 * maxCharacterScale, w * 0.064 * characterScale),
           height: Math.min(86 * maxCharacterScale, stageH * 0.26 * characterScale),
         });
       }
       if (showZhanggui) {
-        this.drawCharacter('掌柜', w * 0.62, stageTop + stageH * 0.5, '#476a70', {
+        this.queueCharacter('zhanggui', '掌柜', w * 0.62, stageTop + stageH * 0.5, '#476a70', {
           width: Math.min(98 * maxCharacterScale, w * 0.088 * characterScale),
           height: Math.min(132 * maxCharacterScale, stageH * 0.39 * characterScale),
           nameOffsetX: this.isPortraitLayout() ? 4 : 0,
         });
       }
     } else if (scene.id === 'body-check') {
-      this.drawBody(w * 0.4, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
-      this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.48, '#31516b', {
+      this.queueBody('xie-wujiu-body-check', w * 0.4, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
+      this.queueCharacter('shen-qinghe', '沈清和', w * 0.16, stageTop + stageH * 0.48, '#31516b', {
         width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
         height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
       });
-      this.drawCharacter('昭雪', w * 0.29, stageTop + stageH * 0.62, '#d8d1bf', {
+      this.queueCharacter('zhaoxue', '昭雪', w * 0.29, stageTop + stageH * 0.62, '#d8d1bf', {
         width: Math.min(78 * maxCharacterScale, w * 0.072 * characterScale),
         height: Math.min(94 * maxCharacterScale, stageH * 0.28 * characterScale),
       });
-      this.drawCharacter('掌柜', w * 0.72, stageTop + stageH * 0.51, '#476a70', {
+      this.queueCharacter('zhanggui', '掌柜', w * 0.72, stageTop + stageH * 0.51, '#476a70', {
         width: Math.min(102 * maxCharacterScale, w * 0.09 * characterScale),
         height: Math.min(136 * maxCharacterScale, stageH * 0.4 * characterScale),
       });
     } else if (scene.id === 'backstage-door') {
-      this.drawCharacter('沈清和', w * 0.16, stageTop + stageH * 0.34, '#31516b', {
+      this.queueCharacter('shen-qinghe', '沈清和', w * 0.16, stageTop + stageH * 0.34, '#31516b', {
         width: Math.min(130 * maxCharacterScale, w * 0.12 * characterScale),
         height: Math.min(170 * maxCharacterScale, stageH * 0.51 * characterScale),
       });
-      this.drawCharacter('昭雪', w * 0.69, stageTop + stageH * 0.55, '#d8d1bf', {
+      this.queueCharacter('zhaoxue', '昭雪', w * 0.69, stageTop + stageH * 0.55, '#d8d1bf', {
         width: Math.min(92 * maxCharacterScale, w * 0.08 * characterScale),
         height: Math.min(112 * maxCharacterScale, stageH * 0.34 * characterScale),
       });
     } else {
-      this.drawCharacter('女伶', w * 0.31, stageTop + stageH * 0.43, '#b52d3a', {
+      this.queueCharacter('nvling', '女伶', w * 0.31, stageTop + stageH * 0.43, '#b52d3a', {
         width: Math.min(112 * maxCharacterScale, w * 0.1 * characterScale),
         height: Math.min(152 * maxCharacterScale, stageH * 0.45 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? 2 : 0,
         talkOffsetX: this.isPortraitLayout() ? 8 : 0,
         talkOffsetY: this.isPortraitLayout() ? -2 : 0,
       });
-      this.drawCharacter('小伶人', w * 0.2, stageTop + stageH * 0.54, '#d29d82', {
+      this.queueCharacter('xiaolingren', '小伶人', w * 0.2, stageTop + stageH * 0.54, '#d29d82', {
         width: Math.min(70 * maxCharacterScale, w * 0.064 * characterScale),
         height: Math.min(96 * maxCharacterScale, stageH * 0.28 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? -5 : 0,
       });
-      if (isStageAfterDeath) {
-        this.drawBody(w * 0.49, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
-      } else {
-        this.drawCharacter('男伶', w * 0.57, stageTop + stageH * 0.43, '#3f5f72', {
+      if (isStageAfterDeath || isCharacterEditor) {
+        this.queueBody('xie-wujiu-stage-body', w * 0.49, stageTop + stageH * 0.83 + 30, w * 0.2, stageH * 0.105);
+      }
+      if (!isStageAfterDeath || isCharacterEditor) {
+        this.queueCharacter('nanling', '男伶', w * 0.57, stageTop + stageH * 0.43, '#3f5f72', {
           width: Math.min(108 * maxCharacterScale, w * 0.098 * characterScale),
           height: Math.min(146 * maxCharacterScale, stageH * 0.43 * characterScale),
           talkOffsetX: this.isPortraitLayout() ? 6 : 0,
@@ -958,6 +978,10 @@ export default class StoryEngine {
       }
       const mirrorW = Math.min(62, w * 0.13);
       this.drawMirror(w * 0.72, stageTop + stageH * 0.43, mirrorW, stageH * 0.2, isStageAfterDeath);
+    }
+
+    if (!this.editor.active || this.editor.mode === 'character') {
+      this.drawQueuedCharacters();
     }
 
     scene.notes.forEach((note, index) => {
@@ -1053,30 +1077,30 @@ export default class StoryEngine {
   drawBackstageRoomCharacters(stageTop, stageH, characterScale, maxCharacterScale) {
     const w = this.width;
     const scene = this.getScene();
-    this.drawCharacter('沈清和', w * 0.14, stageTop + stageH * 0.54, '#31516b', {
+    this.queueCharacter('shen-qinghe', '沈清和', w * 0.14, stageTop + stageH * 0.54, '#31516b', {
       width: Math.min(100 * maxCharacterScale, w * 0.092 * characterScale),
       height: Math.min(132 * maxCharacterScale, stageH * 0.38 * characterScale),
     });
-    this.drawCharacter('昭雪', w * 0.27, stageTop + stageH * 0.69, '#d8d1bf', {
+    this.queueCharacter('zhaoxue', '昭雪', w * 0.27, stageTop + stageH * 0.69, '#d8d1bf', {
       width: Math.min(68 * maxCharacterScale, w * 0.062 * characterScale),
       height: Math.min(82 * maxCharacterScale, stageH * 0.24 * characterScale),
     });
     if (this.shouldShowZhangguiBackstage()) {
-      this.drawCharacter('掌柜', w * 0.78, stageTop + stageH * 0.55, '#476a70', {
+      this.queueCharacter('zhanggui', '掌柜', w * 0.78, stageTop + stageH * 0.55, '#476a70', {
         width: Math.min(88 * maxCharacterScale, w * 0.08 * characterScale),
         height: Math.min(118 * maxCharacterScale, stageH * 0.35 * characterScale),
       });
     }
     if (this.shouldShowXiaoyi()) {
       const xiaoyiX = scene && scene.id === 'backstage-dressing-door' ? w * 0.68 : w * 0.58;
-      this.drawCharacter('小乙', xiaoyiX, stageTop + stageH * 0.64, '#d99167', {
+      this.queueCharacter('xiaoyi', '小乙', xiaoyiX, stageTop + stageH * 0.64, '#d99167', {
         width: Math.min(74 * maxCharacterScale, w * 0.066 * characterScale),
         height: Math.min(104 * maxCharacterScale, stageH * 0.3 * characterScale),
         nameOffsetX: this.isPortraitLayout() ? 2 : 0,
       });
     }
     if (scene && scene.id === 'backstage-props' && this.stepIndex >= 5) {
-      this.drawCharacter('绯萤', w * 0.43, stageTop + stageH * 0.57, '#a73a3d', {
+      this.queueCharacter('feiying', '绯萤', w * 0.43, stageTop + stageH * 0.57, '#a73a3d', {
         width: Math.min(76 * maxCharacterScale, w * 0.068 * characterScale),
         height: Math.min(106 * maxCharacterScale, stageH * 0.31 * characterScale),
       });
@@ -1084,6 +1108,9 @@ export default class StoryEngine {
   }
 
   shouldShowXiaoyi() {
+    if (this.editor.active && this.editor.mode === 'character') {
+      return true;
+    }
     const scene = this.getScene();
     if (!this.isBackstageRoomScene(scene)) {
       return false;
@@ -1098,6 +1125,9 @@ export default class StoryEngine {
   }
 
   shouldShowZhangguiBackstage() {
+    if (this.editor.active && this.editor.mode === 'character') {
+      return true;
+    }
     const scene = this.getScene();
     if (!this.isBackstageRoomScene(scene)) {
       return false;
@@ -1710,7 +1740,16 @@ export default class StoryEngine {
     ctx.restore();
   }
 
-  drawBody(x, y, w, h) {
+  drawBody(x, y, w, h, options = {}) {
+    const rotation = Number.isFinite(options.rotation) ? options.rotation : 0;
+    const centerX = x + w / 2;
+    const centerY = y - h * 1.05 + h;
+    this.ctx.save();
+    if (rotation) {
+      this.ctx.translate(centerX, centerY);
+      this.ctx.rotate((rotation * Math.PI) / 180);
+      this.ctx.translate(-centerX, -centerY);
+    }
     const image = this.characterImages['谢无咎'] && this.characterImages['谢无咎'].body;
     if (image && image.loaded) {
       this.drawImageContain(image, x - w * 0.08, y - h * 2.1, w * 1.16, h * 2.1);
@@ -1719,7 +1758,9 @@ export default class StoryEngine {
       this.ctx.fillStyle = '#1d1f25';
       this.ctx.fillRect(x + w * 0.1, y + h * 0.18, w * 0.82, h * 0.16);
     }
+    this.ctx.restore();
     this.drawLabel('谢无咎', x + w * 0.34, y + h * 0.42, w * 0.28, 18, '#31241f');
+    return { x: x - w * 0.08, y: y - h * 2.1, w: w * 1.16, h: h * 2.1 };
   }
 
   drawCharacter(label, x, y, color, options = {}) {
@@ -1738,6 +1779,14 @@ export default class StoryEngine {
     if (isActive) {
       this.drawActiveGlow(drawX, drawY, width, height);
     }
+    const rotation = Number.isFinite(options.rotation) ? options.rotation : 0;
+    if (rotation) {
+      const centerX = visualRect.x + visualRect.w / 2;
+      const centerY = visualRect.y + visualRect.h / 2;
+      this.ctx.translate(centerX, centerY);
+      this.ctx.rotate((rotation * Math.PI) / 180);
+      this.ctx.translate(-centerX, -centerY);
+    }
     if (image && image.loaded) {
       this.drawAsset(image, 0, 0, image.naturalWidth || image.width, image.naturalHeight || image.height, visualRect.x, visualRect.y, visualRect.w, visualRect.h);
     } else {
@@ -1755,6 +1804,110 @@ export default class StoryEngine {
     const nameRect = this.drawNameBubble(label, bubbleCenterX, bubbleBottomY, isActive);
     if (isActive) {
       this.drawTalkingBubbleNear(nameRect, visualRect, options);
+    }
+    return visualRect;
+  }
+
+  queueCharacter(id, label, x, y, color, options = {}) {
+    const scene = this.getScene();
+    const item = {
+      type: 'character',
+      id,
+      label,
+      color,
+      x,
+      y,
+      width: options.width || 76,
+      height: options.height || 112,
+      rotation: Number.isFinite(options.rotation) ? options.rotation : 0,
+      z: this.sceneCharacterItems.length,
+      options: { ...options },
+      scene,
+    };
+    item.key = this.getCharacterKey(scene, id || label);
+    item.defaultValue = this.getCharacterDefaultValue(item);
+    this.applyCharacterOverride(item);
+    this.sceneCharacterItems.push(item);
+  }
+
+  queueBody(id, x, y, w, h) {
+    const scene = this.getScene();
+    const item = {
+      type: 'body',
+      id,
+      label: '谢无咎尸体',
+      color: '#ddd4c5',
+      x,
+      y,
+      width: w,
+      height: h,
+      rotation: 0,
+      z: this.sceneCharacterItems.length,
+      options: {},
+      scene,
+    };
+    item.key = this.getCharacterKey(scene, id || 'xie-wujiu-body');
+    item.defaultValue = this.getCharacterDefaultValue(item);
+    this.applyCharacterOverride(item);
+    this.sceneCharacterItems.push(item);
+  }
+
+  drawQueuedCharacters() {
+    this.currentCharacterEditorItems = this.sceneCharacterItems
+      .slice()
+      .sort((a, b) => (a.z - b.z) || (this.sceneCharacterItems.indexOf(a) - this.sceneCharacterItems.indexOf(b)));
+    this.currentCharacterEditorItems.forEach((item) => {
+      if (item.type === 'body') {
+        item.rect = this.drawBody(item.x, item.y, item.width, item.height, { rotation: item.rotation });
+        return;
+      }
+      item.rect = this.drawCharacter(item.label, item.x, item.y, item.color, {
+        ...item.options,
+        width: item.width,
+        height: item.height,
+        rotation: item.rotation,
+      });
+    });
+  }
+
+  getCharacterKey(scene, id) {
+    const chapter = this.currentChapter || this.chapters[this.chapterIndex] || this.chapters[0] || {};
+    return [chapter.id || 'chapter', scene && scene.id ? scene.id : 'scene', id].join(':');
+  }
+
+  getCharacterDefaultValue(item) {
+    return {
+      x: this.roundCoord(item.x / Math.max(1, this.width)),
+      y: this.roundCoord(item.y / Math.max(1, this.height)),
+      w: this.roundCoord(item.width / Math.max(1, this.width)),
+      h: this.roundCoord(item.height / Math.max(1, this.height)),
+      rotation: this.roundCoord(item.rotation || 0),
+      z: item.z,
+    };
+  }
+
+  applyCharacterOverride(item) {
+    const override = this.characterOverrides[item.key];
+    if (!override) {
+      return;
+    }
+    if (Number.isFinite(override.x)) {
+      item.x = override.x * this.width;
+    }
+    if (Number.isFinite(override.y)) {
+      item.y = override.y * this.height;
+    }
+    if (Number.isFinite(override.w)) {
+      item.width = override.w * this.width;
+    }
+    if (Number.isFinite(override.h)) {
+      item.height = override.h * this.height;
+    }
+    if (Number.isFinite(override.rotation)) {
+      item.rotation = override.rotation;
+    }
+    if (Number.isFinite(override.z)) {
+      item.z = override.z;
     }
   }
 
@@ -2303,6 +2456,7 @@ export default class StoryEngine {
     this.overlay = '';
     this.messageQueue = [];
     this.editor.active = true;
+    this.editor.mode = 'hotspot';
     this.editor.sceneIndex = this.sceneIndex;
     this.editor.selectedKey = '';
     this.editor.drag = null;
@@ -2336,6 +2490,24 @@ export default class StoryEngine {
       return;
     }
 
+    if (this.editor.mode === 'character') {
+      const items = this.getEditorCharacters();
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        const rect = item.rect || this.getCharacterEditRect(item);
+        if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+          this.editor.selectedKey = item.key;
+          this.editor.drag = {
+            key: item.key,
+            offsetX: x - item.x,
+            offsetY: y - item.y,
+          };
+          return;
+        }
+      }
+      return;
+    }
+
     const items = this.getEditorHotspots();
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
@@ -2364,6 +2536,16 @@ export default class StoryEngine {
     this.markHotspotOverride(item);
   }
 
+  moveEditorCharacterTo(x, y) {
+    const item = this.getEditorCharacters().find((entry) => entry.key === this.editor.drag.key);
+    if (!item) {
+      return;
+    }
+    item.x = this.clamp(x - this.editor.drag.offsetX, -this.width * 0.2, this.width * 1.1);
+    item.y = this.clamp(y - this.editor.drag.offsetY, -this.height * 0.2, this.height * 1.1);
+    this.markCharacterOverride(item);
+  }
+
   changeEditorScene(delta) {
     const total = this.story.scenes.length;
     if (!total) {
@@ -2373,8 +2555,17 @@ export default class StoryEngine {
     this.sceneIndex = this.editor.sceneIndex;
     this.stepIndex = 0;
     const items = this.getEditorHotspots();
-    this.editor.selectedKey = items[0] ? items[0].key : '';
+    const activeItems = this.editor.mode === 'character' ? this.getEditorCharacters() : items;
+    this.editor.selectedKey = activeItems[0] ? activeItems[0].key : '';
     this.editor.drag = null;
+  }
+
+  setEditorMode(mode) {
+    this.editor.mode = mode === 'character' ? 'character' : 'hotspot';
+    this.editor.drag = null;
+    const items = this.editor.mode === 'character' ? this.getEditorCharacters() : this.getEditorHotspots();
+    this.editor.selectedKey = items[0] ? items[0].key : '';
+    this.showToast(this.editor.mode === 'character' ? '角色编辑模式' : '交互点编辑模式');
   }
 
   selectEditorHotspot(item, startDrag = false, x = 0, y = 0) {
@@ -2404,6 +2595,35 @@ export default class StoryEngine {
     this.markHotspotOverride(item);
   }
 
+  resizeEditorCharacter(scaleDelta) {
+    const item = this.getSelectedEditorCharacter();
+    if (!item) {
+      return;
+    }
+    const scale = this.clamp(1 + scaleDelta, 0.55, 1.6);
+    item.width = this.clamp(item.width * scale, this.width * 0.025, this.width * 0.42);
+    item.height = this.clamp(item.height * scale, this.height * 0.025, this.height * 0.62);
+    this.markCharacterOverride(item);
+  }
+
+  rotateEditorCharacter(delta) {
+    const item = this.getSelectedEditorCharacter();
+    if (!item) {
+      return;
+    }
+    item.rotation = this.clamp((item.rotation || 0) + delta, -90, 90);
+    this.markCharacterOverride(item);
+  }
+
+  changeEditorCharacterLayer(delta) {
+    const item = this.getSelectedEditorCharacter();
+    if (!item) {
+      return;
+    }
+    item.z = this.clamp((Number.isFinite(item.z) ? item.z : 0) + delta, -20, 50);
+    this.markCharacterOverride(item);
+  }
+
   resetSelectedEditorHotspot() {
     const item = this.getSelectedEditorHotspot();
     if (!item) {
@@ -2422,6 +2642,16 @@ export default class StoryEngine {
     this.showToast('已恢复默认位置，记得保存');
   }
 
+  resetSelectedEditorCharacter() {
+    const item = this.getSelectedEditorCharacter();
+    if (!item) {
+      return;
+    }
+    delete this.characterOverrides[item.key];
+    this.editor.dirty = true;
+    this.showToast('已恢复默认角色参数，记得保存');
+  }
+
   async saveHotspotOverrides() {
     try {
       if (this.persistHotspotOverrides) {
@@ -2438,6 +2668,22 @@ export default class StoryEngine {
     }
   }
 
+  async saveCharacterOverrides() {
+    try {
+      if (this.persistCharacterOverrides) {
+        await this.persistCharacterOverrides(this.characterOverrides);
+      }
+      const storage = this.getLocalStorage();
+      if (storage) {
+        storage.setItem('feiyi-character-overrides-v1', JSON.stringify(this.characterOverrides));
+      }
+      this.editor.dirty = false;
+      this.showToast(this.persistCharacterOverrides ? '角色配置已写入本地工程' : '角色配置已保存');
+    } catch (error) {
+      this.showToast('保存失败，请启动本地编辑服务');
+    }
+  }
+
   loadHotspotOverrides() {
     try {
       const storage = this.getLocalStorage();
@@ -2445,6 +2691,18 @@ export default class StoryEngine {
         return {};
       }
       return JSON.parse(storage.getItem('feiyi-hotspot-overrides-v1') || '{}') || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  loadCharacterOverrides() {
+    try {
+      const storage = this.getLocalStorage();
+      if (!storage) {
+        return {};
+      }
+      return JSON.parse(storage.getItem('feiyi-character-overrides-v1') || '{}') || {};
     } catch (error) {
       return {};
     }
@@ -2505,6 +2763,18 @@ export default class StoryEngine {
     this.editor.dirty = true;
   }
 
+  markCharacterOverride(item) {
+    this.characterOverrides[item.key] = {
+      x: this.roundCoord(item.x / Math.max(1, this.width)),
+      y: this.roundCoord(item.y / Math.max(1, this.height)),
+      w: this.roundCoord(item.width / Math.max(1, this.width)),
+      h: this.roundCoord(item.height / Math.max(1, this.height)),
+      rotation: this.roundCoord(item.rotation || 0),
+      z: Math.round(Number.isFinite(item.z) ? item.z : 0),
+    };
+    this.editor.dirty = true;
+  }
+
   getHotspotKey(chapter, scene, stepIndex, spot) {
     return [chapter.id || 'chapter', scene.id || 'scene', stepIndex, spot.id || spot.label].join(':');
   }
@@ -2539,6 +2809,28 @@ export default class StoryEngine {
     return this.getEditorHotspots().find((item) => item.key === this.editor.selectedKey);
   }
 
+  getEditorCharacters() {
+    if (this.sceneIndex !== this.editor.sceneIndex) {
+      this.sceneIndex = this.editor.sceneIndex;
+    }
+    return this.currentCharacterEditorItems || [];
+  }
+
+  getSelectedEditorCharacter() {
+    return this.getEditorCharacters().find((item) => item.key === this.editor.selectedKey);
+  }
+
+  getCharacterEditRect(item) {
+    if (item.rect) {
+      return item.rect;
+    }
+    if (item.type === 'body') {
+      return { x: item.x - item.width * 0.08, y: item.y - item.height * 2.1, w: item.width * 1.16, h: item.height * 2.1 };
+    }
+    const rect = this.getImageContainRect(this.characterImages[item.label] && this.characterImages[item.label].body, item.x, item.y, item.width, item.height);
+    return rect || { x: item.x, y: item.y, w: item.width, h: item.height };
+  }
+
   getLocalStorage() {
     if (typeof window === 'undefined' || !window.localStorage) {
       return null;
@@ -2548,21 +2840,29 @@ export default class StoryEngine {
 
   drawEditorOverlay() {
     const ctx = this.ctx;
-    const items = this.getEditorHotspots();
+    const items = this.editor.mode === 'character' ? this.getEditorCharacters() : this.getEditorHotspots();
     const scene = this.story.scenes[this.editor.sceneIndex];
+    if (items.length && !items.some((item) => item.key === this.editor.selectedKey)) {
+      this.editor.selectedKey = items[0].key;
+    }
     this.regions = [];
-    this.drawEditorHotspots(items);
+    if (this.editor.mode === 'character') {
+      this.drawEditorCharacters(items);
+    } else {
+      this.drawEditorHotspots(items);
+    }
 
     ctx.save();
     ctx.fillStyle = 'rgba(4,8,10,0.4)';
     ctx.fillRect(0, 0, this.width, 82);
     ctx.fillStyle = '#fff1d5';
     ctx.font = 'bold 18px Arial';
-    ctx.fillText('交互点编辑器', 16, 34);
+    ctx.fillText('本地编辑器', 16, 34);
     ctx.fillStyle = '#b7d7ce';
     ctx.font = '12px Arial';
     const title = scene ? scene.title : '无场景';
-    ctx.fillText(title + ' · 拖动画面中色块调整位置', 16, 58);
+    const hint = this.editor.mode === 'character' ? '拖动角色框调整站位' : '拖动画面中色块调整位置';
+    ctx.fillText(title + ' · ' + hint, 16, 58);
     this.drawButton(this.width - 72, 18, 56, 32, '退出', () => this.closeHotspotEditor(), {
       fontSize: 13,
       fill: 'rgba(78,48,52,0.94)',
@@ -2595,6 +2895,34 @@ export default class StoryEngine {
       const label = (index + 1) + '. ' + (item.spot.label || item.spot.id);
       ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 4);
       ctx.textAlign = 'left';
+      ctx.restore();
+    });
+  }
+
+  drawEditorCharacters(items) {
+    const ctx = this.ctx;
+    items.forEach((item, index) => {
+      const rect = item.rect || this.getCharacterEditRect(item);
+      const selected = item.key === this.editor.selectedKey;
+      ctx.save();
+      ctx.lineWidth = selected ? 3 : 2;
+      ctx.setLineDash(selected ? [] : [7, 5]);
+      ctx.strokeStyle = selected ? 'rgba(255,186,92,0.98)' : 'rgba(159,209,200,0.88)';
+      ctx.fillStyle = selected ? 'rgba(255,186,92,0.16)' : 'rgba(84,176,170,0.12)';
+      ctx.shadowColor = selected ? 'rgba(255,186,92,0.36)' : 'rgba(159,209,200,0.22)';
+      ctx.shadowBlur = selected ? 14 : 8;
+      this.roundRect(rect.x, rect.y, rect.w, rect.h, 8, ctx.fillStyle, ctx.strokeStyle);
+      ctx.restore();
+
+      ctx.save();
+      const label = (index + 1) + '. ' + item.label;
+      const tagW = Math.min(Math.max(58, label.length * 11), 120);
+      const tagX = this.clamp(rect.x, 8, this.width - tagW - 8);
+      const tagY = Math.max(86, rect.y - 24);
+      this.roundRect(tagX, tagY, tagW, 20, 5, selected ? 'rgba(83,54,36,0.92)' : 'rgba(20,35,36,0.9)', selected ? '#ffba5c' : '#9fd1c8');
+      ctx.fillStyle = '#fff4dc';
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText(label, tagX + 7, tagY + 14);
       ctx.restore();
     });
   }
@@ -2633,19 +2961,37 @@ export default class StoryEngine {
     ctx.font = 'bold 12px Arial';
     this.wrapText(scene ? scene.title : '', selectedX, panel.y + 26, selectedW - 58, 16, 2);
 
-    const selected = this.getSelectedEditorHotspot();
+    const tabY = panel.y + 70;
+    const tabW = Math.min(72, (contentW - 8) / 2);
+    this.drawButton(leftX, tabY, tabW, 26, '交互点', () => this.setEditorMode('hotspot'), {
+      fontSize: 12,
+      fill: this.editor.mode === 'hotspot' ? '#28645f' : '#35464a',
+      stroke: this.editor.mode === 'hotspot' ? '#9fd1c8' : 'rgba(159,209,200,0.44)',
+    });
+    this.drawButton(leftX + tabW + 8, tabY, tabW, 26, '角色', () => this.setEditorMode('character'), {
+      fontSize: 12,
+      fill: this.editor.mode === 'character' ? '#6a4933' : '#4f4642',
+      stroke: this.editor.mode === 'character' ? '#d5a764' : 'rgba(213,167,100,0.44)',
+    });
+
+    const selected = this.editor.mode === 'character' ? this.getSelectedEditorCharacter() : this.getSelectedEditorHotspot();
     ctx.fillStyle = '#fff1d5';
     ctx.font = 'bold 12px Arial';
-    ctx.fillText(selected ? selected.spot.label || selected.spot.id : '未选择', selectedX, panel.y + 58);
+    ctx.fillText(selected ? (selected.label || selected.spot.label || selected.spot.id) : '未选择', selectedX, panel.y + 58);
     if (selected) {
       ctx.fillStyle = '#cfc4b8';
       ctx.font = '10px Arial';
-      ctx.fillText(
-        'x ' + selected.spot.x.toFixed(2) + '  y ' + selected.spot.y.toFixed(2),
-        selectedX + 74,
-        panel.y + 58
-      );
-      this.drawButton(panel.x + panel.w - pad - 52, panel.y + 38, 52, 26, '重置', () => this.resetSelectedEditorHotspot(), {
+      const meta = this.editor.mode === 'character'
+        ? 'x ' + Math.round(selected.x) + ' y ' + Math.round(selected.y) + '  z ' + selected.z
+        : 'x ' + selected.spot.x.toFixed(2) + '  y ' + selected.spot.y.toFixed(2);
+      ctx.fillText(meta, selectedX + 74, panel.y + 58);
+      this.drawButton(panel.x + panel.w - pad - 52, panel.y + 38, 52, 26, '重置', () => {
+        if (this.editor.mode === 'character') {
+          this.resetSelectedEditorCharacter();
+        } else {
+          this.resetSelectedEditorHotspot();
+        }
+      }, {
         fontSize: 11,
         fill: '#4d3436',
         stroke: '#d5a764',
@@ -2654,17 +3000,17 @@ export default class StoryEngine {
 
     ctx.fillStyle = '#fff1d5';
     ctx.font = 'bold 15px Arial';
-    ctx.fillText('交互点', leftX, panel.y + 82);
+    ctx.fillText(this.editor.mode === 'character' ? '角色列表' : '交互点', leftX, panel.y + 112);
     if (!items.length) {
       ctx.fillStyle = '#cfc4b8';
       ctx.font = '12px Arial';
-      this.wrapText('当前场景没有交互点', leftX, panel.y + 108, contentW, 18, 2);
+      this.wrapText(this.editor.mode === 'character' ? '当前场景没有可编辑角色' : '当前场景没有交互点', leftX, panel.y + 138, contentW, 18, 2);
     }
 
     const rowH = 31;
     const rowGap = 6;
     const colGap = 8;
-    const listY = panel.y + 92;
+    const listY = panel.y + 122;
     const listBottom = footerY - 8;
     const maxRows = Math.max(1, Math.floor((listBottom - listY) / (rowH + rowGap)));
     const colCount = Math.max(1, Math.min(3, Math.ceil(items.length / maxRows)));
@@ -2693,44 +3039,74 @@ export default class StoryEngine {
       ctx.beginPath();
       ctx.rect(rowX + 8, rowY, colW - 16, rowH);
       ctx.clip();
-      ctx.fillText((index + 1) + '. ' + (item.spot.label || item.spot.id), rowX + 8, rowY + 14);
+      ctx.fillText((index + 1) + '. ' + (item.label || item.spot.label || item.spot.id), rowX + 8, rowY + 14);
       ctx.fillStyle = '#b7d7ce';
       ctx.font = '10px Arial';
-      ctx.fillText((item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1), rowX + 8, rowY + 28);
+      const subText = this.editor.mode === 'character'
+        ? '大小 ' + Math.round(item.width) + 'x' + Math.round(item.height) + ' · ' + Math.round(item.rotation || 0) + '°'
+        : (item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1);
+      ctx.fillText(subText, rowX + 8, rowY + 28);
       ctx.restore();
-      this.addRegion(rowX, rowY, colW, rowH, (tapX, tapY) => this.selectEditorHotspot(item, true, tapX, tapY));
+      this.addRegion(rowX, rowY, colW, rowH, (tapX, tapY) => {
+        if (this.editor.mode === 'character') {
+          this.selectEditorCharacter(item, true, tapX, tapY);
+        } else {
+          this.selectEditorHotspot(item, true, tapX, tapY);
+        }
+      });
     });
 
     if (selected) {
-      const btnW = Math.max(40, (selectedW - 12) / 4);
-      this.drawButton(selectedX, footerY, btnW, 30, '宽 -', () => this.resizeEditorHotspot(-0.02, 0), {
-        fontSize: 12,
-        fill: '#4f4642',
-        stroke: '#d5a764',
-      });
-      this.drawButton(selectedX + btnW + 4, footerY, btnW, 30, '宽 +', () => this.resizeEditorHotspot(0.02, 0), {
-        fontSize: 12,
-        fill: '#4f4642',
-        stroke: '#d5a764',
-      });
-      this.drawButton(selectedX + (btnW + 4) * 2, footerY, btnW, 30, '高 -', () => this.resizeEditorHotspot(0, -0.02), {
-        fontSize: 12,
-        fill: '#4f4642',
-        stroke: '#d5a764',
-      });
-      this.drawButton(selectedX + (btnW + 4) * 3, footerY, btnW, 30, '高 +', () => this.resizeEditorHotspot(0, 0.02), {
-        fontSize: 12,
-        fill: '#4f4642',
-        stroke: '#d5a764',
+      const btnCount = this.editor.mode === 'character' ? 6 : 4;
+      const btnW = Math.max(34, (selectedW - 4 * (btnCount - 1)) / btnCount);
+      const controls = this.editor.mode === 'character'
+        ? [
+          ['小', () => this.resizeEditorCharacter(-0.08)],
+          ['大', () => this.resizeEditorCharacter(0.08)],
+          ['左旋', () => this.rotateEditorCharacter(-5)],
+          ['右旋', () => this.rotateEditorCharacter(5)],
+          ['后', () => this.changeEditorCharacterLayer(-1)],
+          ['前', () => this.changeEditorCharacterLayer(1)],
+        ]
+        : [
+          ['宽 -', () => this.resizeEditorHotspot(-0.02, 0)],
+          ['宽 +', () => this.resizeEditorHotspot(0.02, 0)],
+          ['高 -', () => this.resizeEditorHotspot(0, -0.02)],
+          ['高 +', () => this.resizeEditorHotspot(0, 0.02)],
+        ];
+      controls.forEach((control, index) => {
+        this.drawButton(selectedX + (btnW + 4) * index, footerY, btnW, 30, control[0], control[1], {
+          fontSize: 11,
+          fill: '#4f4642',
+          stroke: '#d5a764',
+        });
       });
     }
 
     const saveLabel = this.editor.dirty ? '保存*' : '保存';
-    this.drawButton(leftX, footerY, sceneW - 6, 30, saveLabel, () => this.saveHotspotOverrides(), {
+    this.drawButton(leftX, footerY, sceneW - 6, 30, saveLabel, () => {
+      if (this.editor.mode === 'character') {
+        this.saveCharacterOverrides();
+      } else {
+        this.saveHotspotOverrides();
+      }
+    }, {
       fontSize: 14,
       fill: '#28645f',
       stroke: '#9fd1c8',
     });
+  }
+
+  selectEditorCharacter(item, startDrag = false, x = 0, y = 0) {
+    this.editor.selectedKey = item.key;
+    if (startDrag) {
+      this.editor.drag = {
+        key: item.key,
+        offsetX: item.width / 2,
+        offsetY: item.height / 2,
+      };
+      this.moveEditorCharacterTo(x, y);
+    }
   }
 
   getEditorPanelRect() {

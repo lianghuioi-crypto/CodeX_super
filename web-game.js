@@ -2,6 +2,7 @@ import STORY_DATA from './js/story/story-data.js';
 import StoryEngine from './js/story/story-engine.js';
 
 const HOTSPOT_OVERRIDE_PATH = './js/story/hotspot-overrides.json';
+const CHARACTER_OVERRIDE_PATH = './js/story/character-overrides.json';
 const canvas = document.getElementById('game');
 const app = document.getElementById('app');
 const ctx = canvas.getContext('2d');
@@ -37,6 +38,18 @@ async function loadHotspotOverrides() {
   }
 }
 
+async function loadCharacterOverrides() {
+  try {
+    const response = await fetch(CHARACTER_OVERRIDE_PATH + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!response.ok) {
+      return {};
+    }
+    return await response.json();
+  } catch (error) {
+    return {};
+  }
+}
+
 async function persistHotspotOverrides(overrides) {
   const response = await fetch('/__hotspot-overrides', {
     method: 'POST',
@@ -48,11 +61,24 @@ async function persistHotspotOverrides(overrides) {
   }
 }
 
+async function persistCharacterOverrides(overrides) {
+  const response = await fetch('/__character-overrides', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(overrides, null, 2),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to save character overrides');
+  }
+}
+
 const engine = new StoryEngine(canvas, ctx, STORY_DATA, {
   getSize: () => ({ width: state.width, height: state.height }),
   editorEnabled: isLocalEditorHost,
   hotspotOverrides: await loadHotspotOverrides(),
+  characterOverrides: await loadCharacterOverrides(),
   persistHotspotOverrides: isLocalEditorHost ? persistHotspotOverrides : null,
+  persistCharacterOverrides: isLocalEditorHost ? persistCharacterOverrides : null,
 });
 
 function toCanvasPoint(event) {
