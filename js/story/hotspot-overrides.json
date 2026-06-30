@@ -1,7 +1,7 @@
 {
   "chapter-2:backstage-room-entry:6:ghost-mask": {
-    "x": 0.1948,
-    "y": 0.3431,
+    "x": 0.1931,
+    "y": 0.3258,
     "w": 0.16,
     "h": 0.06
   },
@@ -12,76 +12,76 @@
     "h": 0.12
   },
   "chapter-2:backstage-room-entry:8:strike-gong": {
-    "x": 0.4043,
-    "y": 0.4486,
+    "x": 0.3629,
+    "y": 0.4471,
     "w": 0.16,
     "h": 0.06
   },
   "chapter-2:backstage-room-entry:7:cue-gong": {
-    "x": 0.3801,
-    "y": 0.4324,
+    "x": 0.3663,
+    "y": 0.4351,
     "w": 0.14,
     "h": 0.06
   },
   "chapter-2:backstage-xie-seat:2:xie-bench": {
-    "x": 0.2887,
-    "y": 0.5381,
+    "x": 0.3969,
+    "y": 0.5516,
     "w": 0.26,
     "h": 0.04
   },
   "chapter-2:backstage-xie-seat:3:plum": {
-    "x": 0.4432,
-    "y": 0.5172,
+    "x": 0.4382,
+    "y": 0.5083,
     "w": 0.12,
     "h": 0.04
   },
   "chapter-2:backstage-xie-seat:1:fallen-stool": {
-    "x": 0.3223,
-    "y": 0.5288,
+    "x": 0.4116,
+    "y": 0.5523,
     "w": 0.22,
     "h": 0.04
   },
   "chapter-2:backstage-xie-seat:0:ask-xiaoyi": {
-    "x": 0.5957,
-    "y": 0.5087,
+    "x": 0.5988,
+    "y": 0.4337,
     "w": 0.1,
     "h": 0.1
   },
   "chapter-2:backstage-xie-seat:3:sweat-cloth": {
-    "x": 0.6756,
-    "y": 0.5147,
+    "x": 0.6012,
+    "y": 0.5482,
     "w": 0.12,
     "h": 0.08
   },
   "chapter-2:backstage-xie-seat:3:tea": {
-    "x": 0.3077,
-    "y": 0.452,
+    "x": 0.3285,
+    "y": 0.4579,
     "w": 0.12,
     "h": 0.08
   },
   "chapter-2:backstage-props:1:black-shoe": {
-    "x": 0.0785,
-    "y": 0.4569,
-    "w": 0.16,
-    "h": 0.08
+    "x": 0.0835,
+    "y": 0.4748,
+    "w": 0.14,
+    "h": 0.04
   },
   "chapter-2:backstage-props:0:scuff-mark": {
-    "x": 0.0961,
-    "y": 0.5657,
-    "w": 0.26,
-    "h": 0.08
-  },
-  "chapter-2:backstage-xie-seat:4:oil-lamp": {
-    "x": 0.0682,
-    "y": 0.3023,
+    "x": 0.0664,
+    "y": 0.5823,
     "w": 0.16,
     "h": 0.06
   },
+  "chapter-2:backstage-xie-seat:4:oil-lamp": {
+    "x": 0.0718,
+    "y": 0.2805,
+    "w": 0.08,
+    "h": 0.08
+  },
   "chapter-2:backstage-props:6:xiaoyi-route": {
-    "x": 0.5019,
-    "y": 0.5004,
-    "w": 0.14,
-    "h": 0.16
+    "x": 0.6805,
+    "y": 0.5756,
+    "w": 0.08,
+    "h": 0.08
   },
   "chapter-2:backstage-props:4:ghost-bell": {
     "x": 0.4771,
@@ -90,22 +90,22 @@
     "h": 0.14
   },
   "chapter-2:backstage-props:2:prop-rack": {
-    "x": 0.6042,
-    "y": 0.2283,
-    "w": 0.28,
-    "h": 0.26
+    "x": 0.5722,
+    "y": 0.2771,
+    "w": 0.34,
+    "h": 0.14
   },
   "chapter-2:backstage-props:5:blocking-board": {
-    "x": 0.2287,
-    "y": 0.2478,
-    "w": 0.26,
-    "h": 0.18
+    "x": 0.2495,
+    "y": 0.314,
+    "w": 0.22,
+    "h": 0.08
   },
   "chapter-2:backstage-props:3:blood-box": {
-    "x": 0.6063,
-    "y": 0.4848,
+    "x": 0.6109,
+    "y": 0.5062,
     "w": 0.18,
-    "h": 0.12
+    "h": 0.06
   },
   "chapter-2:backstage-deduction:0:more-clues": {
     "x": 0.5526,

@@ -91,6 +91,15 @@ const STORY_ATLAS = {
 
 const CHANGELOG = [
   {
+    version: '1.26',
+    date: '2026-06-30',
+    items: [
+      '角色头顶名字气泡整体缩小 30%，减少遮挡舞台角色。',
+      '交互点击区域闪动速度加快一倍，区域文字缩小并固定在框体顶部。',
+      '本地角色编辑模式新增镜像翻转按钮，翻转状态会随角色配置保存。',
+    ],
+  },
+  {
     version: '1.25',
     date: '2026-06-30',
     items: [
@@ -1745,9 +1754,14 @@ export default class StoryEngine {
     const centerX = x + w / 2;
     const centerY = y - h * 1.05 + h;
     this.ctx.save();
-    if (rotation) {
+    if (rotation || options.flipX) {
       this.ctx.translate(centerX, centerY);
-      this.ctx.rotate((rotation * Math.PI) / 180);
+      if (rotation) {
+        this.ctx.rotate((rotation * Math.PI) / 180);
+      }
+      if (options.flipX) {
+        this.ctx.scale(-1, 1);
+      }
       this.ctx.translate(-centerX, -centerY);
     }
     const image = this.characterImages['谢无咎'] && this.characterImages['谢无咎'].body;
@@ -1780,11 +1794,16 @@ export default class StoryEngine {
       this.drawActiveGlow(drawX, drawY, width, height);
     }
     const rotation = Number.isFinite(options.rotation) ? options.rotation : 0;
-    if (rotation) {
+    if (rotation || options.flipX) {
       const centerX = visualRect.x + visualRect.w / 2;
       const centerY = visualRect.y + visualRect.h / 2;
       this.ctx.translate(centerX, centerY);
-      this.ctx.rotate((rotation * Math.PI) / 180);
+      if (rotation) {
+        this.ctx.rotate((rotation * Math.PI) / 180);
+      }
+      if (options.flipX) {
+        this.ctx.scale(-1, 1);
+      }
       this.ctx.translate(-centerX, -centerY);
     }
     if (image && image.loaded) {
@@ -1820,6 +1839,7 @@ export default class StoryEngine {
       width: options.width || 76,
       height: options.height || 112,
       rotation: Number.isFinite(options.rotation) ? options.rotation : 0,
+      flipX: Boolean(options.flipX),
       z: this.sceneCharacterItems.length,
       options: { ...options },
       scene,
@@ -1842,6 +1862,7 @@ export default class StoryEngine {
       width: w,
       height: h,
       rotation: 0,
+      flipX: false,
       z: this.sceneCharacterItems.length,
       options: {},
       scene,
@@ -1858,7 +1879,7 @@ export default class StoryEngine {
       .sort((a, b) => (a.z - b.z) || (this.sceneCharacterItems.indexOf(a) - this.sceneCharacterItems.indexOf(b)));
     this.currentCharacterEditorItems.forEach((item) => {
       if (item.type === 'body') {
-        item.rect = this.drawBody(item.x, item.y, item.width, item.height, { rotation: item.rotation });
+        item.rect = this.drawBody(item.x, item.y, item.width, item.height, { rotation: item.rotation, flipX: item.flipX });
         return;
       }
       item.rect = this.drawCharacter(item.label, item.x, item.y, item.color, {
@@ -1866,6 +1887,7 @@ export default class StoryEngine {
         width: item.width,
         height: item.height,
         rotation: item.rotation,
+        flipX: item.flipX,
       });
     });
   }
@@ -1882,6 +1904,7 @@ export default class StoryEngine {
       w: this.roundCoord(item.width / Math.max(1, this.width)),
       h: this.roundCoord(item.height / Math.max(1, this.height)),
       rotation: this.roundCoord(item.rotation || 0),
+      flipX: Boolean(item.flipX),
       z: item.z,
     };
   }
@@ -1905,6 +1928,9 @@ export default class StoryEngine {
     }
     if (Number.isFinite(override.rotation)) {
       item.rotation = override.rotation;
+    }
+    if (typeof override.flipX === 'boolean') {
+      item.flipX = override.flipX;
     }
     if (Number.isFinite(override.z)) {
       item.z = override.z;
@@ -2029,10 +2055,11 @@ export default class StoryEngine {
     const ctx = this.ctx;
     ctx.save();
     const isPortrait = this.isPortraitLayout();
-    ctx.font = 'bold ' + (isPortrait ? 12 : 13) + 'px Arial';
-    const paddingX = isPortrait ? 10 : 12;
-    const bubbleW = Math.max(isPortrait ? 44 : 50, ctx.measureText(label).width + paddingX * 2);
-    const bubbleH = isPortrait ? 24 : 26;
+    const fontSize = Math.max(8, Math.round((isPortrait ? 12 : 13) * 0.7));
+    ctx.font = 'bold ' + fontSize + 'px Arial';
+    const paddingX = (isPortrait ? 10 : 12) * 0.7;
+    const bubbleW = Math.max((isPortrait ? 44 : 50) * 0.7, ctx.measureText(label).width + paddingX * 2);
+    const bubbleH = (isPortrait ? 24 : 26) * 0.7;
     const margin = 8;
     const x = Math.max(margin, Math.min(this.width - bubbleW - margin, centerX - bubbleW / 2));
     const y = Math.max(isPortrait ? 96 : 88, bottomY - bubbleH);
@@ -2041,13 +2068,13 @@ export default class StoryEngine {
       y,
       bubbleW,
       bubbleH,
-      13,
+      9,
       isActive ? 'rgba(255,233,158,0.98)' : 'rgba(255,244,223,0.94)',
       isActive ? 'rgba(255,246,196,0.95)' : 'rgba(130,88,54,0.72)'
     );
     ctx.fillStyle = isActive ? '#4a231f' : '#5a2b24';
     ctx.textAlign = 'center';
-    ctx.fillText(label, x + bubbleW / 2, y + (isPortrait ? 16 : 17));
+    ctx.fillText(label, x + bubbleW / 2, y + bubbleH / 2 + fontSize * 0.36);
     ctx.textAlign = 'left';
     ctx.restore();
     return { x, y, w: bubbleW, h: bubbleH };
@@ -2098,14 +2125,14 @@ export default class StoryEngine {
   }
 
   drawPulseRect(x, y, w, h, label) {
-    const pulse = (Math.sin(Date.now() / 720) + 1) / 2;
+    const pulse = (Math.sin(Date.now() / 360) + 1) / 2;
     const fillAlpha = 0.08 + pulse * 0.16;
     const strokeAlpha = 0.42 + pulse * 0.5;
     const glowAlpha = 0.2 + pulse * 0.26;
     this.ctx.save();
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6, 5]);
-    this.ctx.lineDashOffset = -Date.now() / 520;
+    this.ctx.lineDashOffset = -Date.now() / 260;
     this.ctx.shadowColor = 'rgba(240, 210, 140, ' + glowAlpha + ')';
     this.ctx.shadowBlur = 8 + pulse * 8;
     this.roundRect(
@@ -2121,9 +2148,10 @@ export default class StoryEngine {
     this.ctx.save();
     this.ctx.globalAlpha = 0.74 + pulse * 0.26;
     this.ctx.fillStyle = '#fff1d5';
-    this.ctx.font = 'bold 13px Arial';
+    const labelFontSize = 9;
+    this.ctx.font = 'bold ' + labelFontSize + 'px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(label, x + w / 2, y + h / 2 + 5);
+    this.ctx.fillText(label, x + w / 2, y + Math.max(labelFontSize + 4, 12));
     this.ctx.textAlign = 'left';
     this.ctx.restore();
   }
@@ -2615,6 +2643,15 @@ export default class StoryEngine {
     this.markCharacterOverride(item);
   }
 
+  flipEditorCharacter() {
+    const item = this.getSelectedEditorCharacter();
+    if (!item) {
+      return;
+    }
+    item.flipX = !item.flipX;
+    this.markCharacterOverride(item);
+  }
+
   changeEditorCharacterLayer(delta) {
     const item = this.getSelectedEditorCharacter();
     if (!item) {
@@ -2770,6 +2807,7 @@ export default class StoryEngine {
       w: this.roundCoord(item.width / Math.max(1, this.width)),
       h: this.roundCoord(item.height / Math.max(1, this.height)),
       rotation: this.roundCoord(item.rotation || 0),
+      flipX: Boolean(item.flipX),
       z: Math.round(Number.isFinite(item.z) ? item.z : 0),
     };
     this.editor.dirty = true;
@@ -3043,7 +3081,7 @@ export default class StoryEngine {
       ctx.fillStyle = '#b7d7ce';
       ctx.font = '10px Arial';
       const subText = this.editor.mode === 'character'
-        ? '大小 ' + Math.round(item.width) + 'x' + Math.round(item.height) + ' · ' + Math.round(item.rotation || 0) + '°'
+        ? '大小 ' + Math.round(item.width) + 'x' + Math.round(item.height) + ' · ' + Math.round(item.rotation || 0) + '°' + (item.flipX ? ' · 镜像' : '')
         : (item.step.type || 'hotspot') + ' · step ' + (item.stepIndex + 1);
       ctx.fillText(subText, rowX + 8, rowY + 28);
       ctx.restore();
@@ -3057,14 +3095,15 @@ export default class StoryEngine {
     });
 
     if (selected) {
-      const btnCount = this.editor.mode === 'character' ? 6 : 4;
-      const btnW = Math.max(34, (selectedW - 4 * (btnCount - 1)) / btnCount);
+      const btnCount = this.editor.mode === 'character' ? 7 : 4;
+      const btnW = Math.max(this.editor.mode === 'character' ? 28 : 34, (selectedW - 4 * (btnCount - 1)) / btnCount);
       const controls = this.editor.mode === 'character'
         ? [
           ['小', () => this.resizeEditorCharacter(-0.08)],
           ['大', () => this.resizeEditorCharacter(0.08)],
-          ['左旋', () => this.rotateEditorCharacter(-5)],
-          ['右旋', () => this.rotateEditorCharacter(5)],
+          ['左', () => this.rotateEditorCharacter(-5)],
+          ['右', () => this.rotateEditorCharacter(5)],
+          ['镜像', () => this.flipEditorCharacter()],
           ['后', () => this.changeEditorCharacterLayer(-1)],
           ['前', () => this.changeEditorCharacterLayer(1)],
         ]
@@ -3076,7 +3115,7 @@ export default class StoryEngine {
         ];
       controls.forEach((control, index) => {
         this.drawButton(selectedX + (btnW + 4) * index, footerY, btnW, 30, control[0], control[1], {
-          fontSize: 11,
+          fontSize: this.editor.mode === 'character' ? 10 : 11,
           fill: '#4f4642',
           stroke: '#d5a764',
         });
