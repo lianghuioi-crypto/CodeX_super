@@ -49,7 +49,8 @@ function isCharacterOverrideMap(value) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       return false;
     }
-    return ['x', 'y', 'w', 'h', 'rotation', 'z'].every((key) => Number.isFinite(entry[key]));
+    return ['x', 'y', 'w', 'h', 'rotation', 'z'].every((key) => Number.isFinite(entry[key]))
+      && (entry.flipX === undefined || typeof entry.flipX === 'boolean');
   });
 }
 
